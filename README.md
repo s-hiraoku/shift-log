@@ -39,13 +39,14 @@ pnpm --filter @shift-log/api dev          # http://localhost:8787
 pnpm --filter @shift-log/web dev          # http://localhost:3000
 ```
 
-環境変数:
+環境変数（サーバー側のみ — `NEXT_PUBLIC_*` にトークンを置かない）:
 
 ```bash
 SHIFTLOG_API_TOKEN=dev-token
 SHIFTLOG_API_ORIGIN=http://localhost:8787
-NEXT_PUBLIC_SHIFTLOG_API_TOKEN=dev-token
 ```
+
+Web UI は `/api/*` の Route Handler 経由で API を呼び、Bearer トークンはサーバー側で付与します。
 
 ## API（認証: Bearer）
 

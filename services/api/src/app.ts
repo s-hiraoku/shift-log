@@ -9,7 +9,8 @@ import {
   canCollect,
 } from "@shift-log/schema";
 import { requireAuth } from "./middleware/auth.js";
-import { store } from "./lib/store.js";
+import { sanitizeWindowUpload } from "./lib/sanitize.js";
+import { isRawWindowExpired, store } from "./lib/store.js";
 import { summarizeSixHourBundle, summarizeTenMinuteWindow } from "./jobs/summarize.js";
 
 export function createApp() {
@@ -42,8 +43,21 @@ export function createApp() {
     }
 
     const body = await c.req.json();
-    const upload = WindowUploadSchema.parse(body);
+    const parsed = WindowUploadSchema.parse(body);
+    const upload = sanitizeWindowUpload(parsed);
     store.purgeExpiredRawEvents();
+
+    if (isRawWindowExpired(upload.metadata)) {
+      return c.json(
+        {
+          error: "raw_event_expired",
+          message:
+            "Raw events older than 48 hours (by capture window_end) are not retained.",
+        },
+        410,
+      );
+    }
+
     store.putWindow(upload);
     summarizeTenMinuteWindow(store, upload);
 

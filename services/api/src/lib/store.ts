@@ -31,6 +31,25 @@ function scopeCutoff(scope: DeleteScope, now = new Date()): Date | null {
   }
 }
 
+/** Interval [start, end] overlaps [cutoff, now] when end >= cutoff. */
+function overlapsCutoff(
+  windowStart: string,
+  windowEnd: string,
+  cutoff: Date | null,
+): boolean {
+  if (cutoff === null) return true;
+  void windowStart;
+  return new Date(windowEnd) >= cutoff;
+}
+
+/** Raw retention is based on capture time (window_end), not upload time. */
+export function isRawWindowExpired(
+  metadata: Pick<WindowMetadata, "window_end">,
+  now = new Date(),
+): boolean {
+  return new Date(metadata.window_end) < hoursAgo(RAW_EVENT_RETENTION_HOURS, now);
+}
+
 /**
  * In-memory store for v1 / local & serverless demos.
  * Replace with durable storage (e.g. Neon/Blob) for production.
@@ -46,11 +65,14 @@ export class MemoryStore {
     this.permissions = PermissionsConfigSchema.parse({});
   }
 
-  putWindow(upload: WindowUpload): StoredWindow {
+  putWindow(upload: WindowUpload, now = new Date()): StoredWindow | null {
+    if (isRawWindowExpired(upload.metadata, now)) {
+      return null;
+    }
     const stored: StoredWindow = {
       metadata: upload.metadata,
       events: upload.events,
-      uploaded_at: new Date().toISOString(),
+      uploaded_at: now.toISOString(),
     };
     this.windows.set(upload.metadata.window_id, stored);
     return stored;
@@ -85,12 +107,11 @@ export class MemoryStore {
     this.memories.set(record.id, record);
   }
 
-  /** Discard raw events older than 48h. Markdown memories are kept. */
+  /** Discard raw events whose capture window ended more than 48h ago. */
   purgeExpiredRawEvents(now = new Date()): number {
-    const cutoff = hoursAgo(RAW_EVENT_RETENTION_HOURS, now);
     let removed = 0;
     for (const [id, w] of this.windows) {
-      if (new Date(w.uploaded_at) < cutoff) {
+      if (isRawWindowExpired(w.metadata, now)) {
         this.windows.delete(id);
         removed += 1;
       }
@@ -100,6 +121,7 @@ export class MemoryStore {
 
   /**
    * Clearing history deletes matching interaction events AND memories.
+   * Match any interval that overlaps the selected period (window_end >= cutoff).
    * This cannot be undone (matches Computer History semantics).
    */
   deleteByScope(scope: DeleteScope, now = new Date()): {
@@ -111,16 +133,22 @@ export class MemoryStore {
     let deleted_memories = 0;
 
     for (const [id, w] of this.windows) {
-      const start = new Date(w.metadata.window_start);
-      if (cutoff === null || start >= cutoff) {
+      if (
+        overlapsCutoff(w.metadata.window_start, w.metadata.window_end, cutoff)
+      ) {
         this.windows.delete(id);
         deleted_windows += 1;
       }
     }
 
     for (const [id, m] of this.memories) {
-      const start = new Date(m.front_matter.window_start);
-      if (cutoff === null || start >= cutoff) {
+      if (
+        overlapsCutoff(
+          m.front_matter.window_start,
+          m.front_matter.window_end,
+          cutoff,
+        )
+      ) {
         this.memories.delete(id);
         deleted_memories += 1;
       }
