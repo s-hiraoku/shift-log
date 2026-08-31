@@ -30,7 +30,7 @@ export type EventType = z.infer<typeof EventTypeSchema>;
 export const InteractionEventSchema = z.object({
   id: z.string().min(1),
   type: EventTypeSchema,
-  ts: z.string().datetime(),
+  ts: z.iso.datetime(),
   device: DeviceLaneSchema,
   app: z.string().optional(),
   /** Site host when applicable; private browsing must never appear. */
@@ -46,6 +46,6 @@ export const InteractionEventSchema = z.object({
     .optional(),
   shortcut: z.string().optional(),
   urlPath: z.string().optional(),
-  meta: z.record(z.unknown()).optional(),
+  meta: z.record(z.string(), z.unknown()).optional(),
 });
 export type InteractionEvent = z.infer<typeof InteractionEventSchema>;

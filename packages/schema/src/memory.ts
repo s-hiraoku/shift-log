@@ -13,8 +13,8 @@ export const MemoryFrontMatterSchema = z.object({
   description: z.string(),
   apps: z.array(z.string()),
   device: z.union([DeviceLaneSchema, z.literal("both")]),
-  window_start: z.string().datetime(),
-  window_end: z.string().datetime(),
+  window_start: z.iso.datetime(),
+  window_end: z.iso.datetime(),
   kind: MemoryKindSchema.default("ten_minute"),
   window_ids: z.array(z.string()).default([]),
   /** Flag only — SkillCheck implementation comes later. */
@@ -28,8 +28,8 @@ export const MemoryRecordSchema = z.object({
   front_matter: MemoryFrontMatterSchema,
   /** Human-readable work summary body (Markdown). */
   body: z.string(),
-  created_at: z.string().datetime(),
-  updated_at: z.string().datetime(),
+  created_at: z.iso.datetime(),
+  updated_at: z.iso.datetime(),
 });
 export type MemoryRecord = z.infer<typeof MemoryRecordSchema>;
 

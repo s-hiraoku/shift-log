@@ -15,7 +15,11 @@ const SourceRulesSchema = z
     exclude: z.array(z.string()).default([]),
     include_only: z.array(z.string()).default([]),
   })
-  .default({});
+  .default({
+    mode: "exclude_listed",
+    exclude: [],
+    include_only: [],
+  });
 
 const CapturePolicySchema = z
   .object({
@@ -25,7 +29,13 @@ const CapturePolicySchema = z
     system_audio: z.literal(false).default(false),
     full_keylog: z.literal(false).default(false),
   })
-  .default({});
+  .default({
+    screenshots: false,
+    screen_recording: false,
+    microphone: false,
+    system_audio: false,
+    full_keylog: false,
+  });
 
 export const PermissionsConfigSchema = z.object({
   /** Master switch — default off. */

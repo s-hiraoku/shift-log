@@ -4,8 +4,8 @@ import { DeviceLaneSchema, InteractionEventSchema } from "./events.js";
 /** Ten-minute activity window payload (events.jsonl + metadata.json). */
 export const WindowMetadataSchema = z.object({
   window_id: z.string().min(1),
-  window_start: z.string().datetime(),
-  window_end: z.string().datetime(),
+  window_start: z.iso.datetime(),
+  window_end: z.iso.datetime(),
   devices: z.array(DeviceLaneSchema).min(1),
   /** True when desk and mobile both contributed. */
   dual_lane: z.boolean().default(false),
