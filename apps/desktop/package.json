@@ -9,15 +9,16 @@
     "start": "node dist/collector.js",
     "test": "vitest run",
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "lint": "tsc -p tsconfig.json --noEmit"
+    "lint": "tsc -p tsconfig.json --noEmit",
+    "demo": "tsx src/collector.ts --demo"
   },
   "dependencies": {
     "@shift-log/schema": "workspace:*"
   },
   "devDependencies": {
-    "@types/node": "^22.13.10",
-    "tsx": "^4.19.3",
-    "typescript": "^5.8.2",
-    "vitest": "^3.0.9"
+    "@types/node": "^26.4.0",
+    "tsx": "^4.23.13",
+    "typescript": "^5.9.3",
+    "vitest": "^3.2.7"
   }
 }

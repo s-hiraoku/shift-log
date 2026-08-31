@@ -46,6 +46,26 @@ export default function SettingsPage() {
     }
   }
 
+  async function seedDemo() {
+    setStatus("デモデータ投入中…");
+    try {
+      const result = await apiFetch<{
+        windows: number;
+        memories: number;
+      }>("/v1/demo/seed", {
+        method: "POST",
+        body: JSON.stringify({ enable: true }),
+      });
+      const saved = await apiFetch<PermissionsConfig>("/v1/permissions");
+      setConfig(saved);
+      setStatus(
+        `デモ投入完了: windows=${result.windows}, memories=${result.memories}`,
+      );
+    } catch (e) {
+      setStatus(String(e));
+    }
+  }
+
   async function deleteHistory(scope: string) {
     setStatus("削除中…");
     try {
@@ -122,6 +142,14 @@ export default function SettingsPage() {
           保存
         </button>
         {status ? <p className="muted">{status}</p> : null}
+      </section>
+
+      <section className="card stack">
+        <h2>デモ</h2>
+        <p className="muted">収集をオンにし、サンプルの十分窓と記憶を投入します。</p>
+        <button type="button" onClick={() => void seedDemo()}>
+          デモデータを投入
+        </button>
       </section>
 
       <section className="card stack">

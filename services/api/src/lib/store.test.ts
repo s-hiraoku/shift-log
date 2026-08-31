@@ -160,3 +160,46 @@ describe("MemoryStore deleteByScope overlap", () => {
     expect(store.windows.has("cross-cutoff")).toBe(false);
   });
 });
+
+
+describe("MemoryStore persistence", () => {
+  it("round-trips permissions and memories when SHIFTLOG_DATA_DIR is set", async () => {
+    const dir = await import("node:fs/promises").then(async (fs) => {
+      const os = await import("node:os");
+      const path = await import("node:path");
+      const d = await fs.mkdtemp(path.join(os.tmpdir(), "shiftlog-"));
+      return d;
+    });
+    process.env.SHIFTLOG_DATA_DIR = dir;
+    delete process.env.VITEST;
+    const { MemoryStore } = await import("./store.js");
+    const a = new MemoryStore();
+    a.setPermissions({
+      ...a.permissions,
+      enabled: true,
+      memories_enabled: true,
+    });
+    a.putMemory({
+      id: "persist-1",
+      created_at: "2026-08-30T01:10:00.000Z",
+      updated_at: "2026-08-30T01:10:00.000Z",
+      front_matter: {
+        title: "persisted",
+        description: "from disk",
+        apps: ["Code"],
+        device: "desk",
+        window_start: "2026-08-30T01:00:00.000Z",
+        window_end: "2026-08-30T01:10:00.000Z",
+        kind: "ten_minute",
+        window_ids: ["w1"],
+        skill_candidate: false,
+      },
+      body: "hello",
+    });
+    const b = new MemoryStore();
+    expect(b.permissions.enabled).toBe(true);
+    expect(b.memories.has("persist-1")).toBe(true);
+    process.env.VITEST = "1";
+    delete process.env.SHIFTLOG_DATA_DIR;
+  });
+});
