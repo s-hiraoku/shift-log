@@ -21,7 +21,18 @@ apps/desktop    デスクトップコレクタ（メニューバー一時停止�
 apps/mobile     スマホコレクタスタブ（コントロールセンター相当）
 services/api    認証つきクラウド API（Hono / Vercel 対応）
 packages/schema 共有 Zod スキーマ
+skills/shift-log エージェント向け Skill（続きやって = context_only）
 ```
+
+## エージェント Skill
+
+クラウドエージェントが ShiftLog を作業記憶として使うための Skill を同梱しています。
+
+- 本体: [`skills/shift-log/SKILL.md`](skills/shift-log/SKILL.md)
+- API 詳細: [`skills/shift-log/api-reference.md`](skills/shift-log/api-reference.md)
+
+Cursor などではリポジトリの Skill を有効化するか、`skills/shift-log` をエージェントの skill ディレクトリにコピーしてください。  
+「続きやって」は必ず `/v1/agent/continue` → `mode: context_only` として扱い、Computer Use は行いません。
 
 ## データ形
 

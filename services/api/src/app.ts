@@ -117,7 +117,7 @@ export function createApp() {
     return c.json({ ok: true, ...result });
   });
 
-    /**
+  /**
    * Agent read endpoint: recent memories as working-memory context.
    * "続きやって" returns context only — does not execute (no Computer Use).
    */
