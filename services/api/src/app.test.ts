@@ -242,4 +242,16 @@ describe("ShiftLog API", () => {
     });
     expect(res.status).toBe(410);
   });
+  it("seeds demo data and enables collection", async () => {
+    const res = await app.request("/v1/demo/seed", {
+      method: "POST",
+      headers: authHeaders(),
+      body: JSON.stringify({ enable: true }),
+    });
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.windows).toBeGreaterThan(0);
+    expect(body.permissions_enabled).toBe(true);
+    expect(store.memories.size).toBeGreaterThan(0);
+  });
 });

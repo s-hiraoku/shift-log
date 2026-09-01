@@ -21,7 +21,18 @@ apps/desktop    デスクトップコレクタ（メニューバー一時停止�
 apps/mobile     スマホコレクタスタブ（コントロールセンター相当）
 services/api    認証つきクラウド API（Hono / Vercel 対応）
 packages/schema 共有 Zod スキーマ
+skills/shift-log エージェント向け Skill（続きやって = context_only）
 ```
+
+## エージェント Skill
+
+クラウドエージェントが ShiftLog を作業記憶として使うための Skill を同梱しています。
+
+- 本体: [`skills/shift-log/SKILL.md`](skills/shift-log/SKILL.md)
+- API 詳細: [`skills/shift-log/api-reference.md`](skills/shift-log/api-reference.md)
+
+Cursor などではリポジトリの Skill を有効化するか、`skills/shift-log` をエージェントの skill ディレクトリにコピーしてください。  
+「続きやって」は必ず `/v1/agent/continue` → `mode: context_only` として扱い、Computer Use は行いません。
 
 ## データ形
 
@@ -29,6 +40,38 @@ packages/schema 共有 Zod スキーマ
 - **記憶 Markdown**: YAML フロントマターに `title`, `description`, `apps`, `device`, `window_start`, `window_end`
 - 十分サマリと、最大 36 本を束ねた六時間サマリ
 - 同一十分窓に PC とスマホがいれば `desk` / `mobile` の二レーン
+
+
+## MVP クイックスタート
+
+```bash
+cp .env.example .env
+pnpm install
+pnpm --filter @shift-log/schema build
+pnpm dev:api          # http://localhost:8787 （data/ に永続化）
+pnpm dev:web          # http://localhost:3000
+```
+
+1. ブラウザで http://localhost:3000 を開き、「有効化してデモデータを投入」
+2. タイムラインで記憶を確認
+3. （任意）連続収集デモ: `pnpm demo:desktop`
+4. （任意）CLI シード: `pnpm seed`
+
+### MVP でできること
+
+- 設定で収集 ON/OFF・一時停止・履歴削除
+- 十分窓のアップロード → Markdown 記憶化 → タイムライン/検索
+- デスクトップの `--demo` 連続コレクタ（OS フックの代わりに安全な擬似イベント）
+- ファイル永続化（`SHIFTLOG_DATA_DIR`、デフォルト `./data`）
+- エージェント向け `context_only`（Computer Use なし）
+
+### まだスタブのもの
+
+- 実 OS のアクセシビリティ / メニューバー常駐
+- スマホネイティブ連携
+- LLM 要約（現状は決定論的テンプレート）
+- マルチユーザー認証（共有 Bearer）
+
 
 ## セットアップ
 
@@ -44,6 +87,7 @@ pnpm --filter @shift-log/web dev          # http://localhost:3000
 ```bash
 SHIFTLOG_API_TOKEN=dev-token
 SHIFTLOG_API_ORIGIN=http://localhost:8787
+SHIFTLOG_DATA_DIR=./data
 ```
 
 Web UI は `/api/*` の Route Handler 経由で API を呼び、Bearer トークンはサーバー側で付与します。

@@ -12,6 +12,7 @@ import { requireAuth } from "./middleware/auth.js";
 import { sanitizeWindowUpload } from "./lib/sanitize.js";
 import { isRawWindowExpired, store } from "./lib/store.js";
 import { summarizeSixHourBundle, summarizeTenMinuteWindow } from "./jobs/summarize.js";
+import { seedDemoData } from "./lib/demo.js";
 
 export function createApp() {
   const app = new Hono();
@@ -26,7 +27,7 @@ export function createApp() {
 
   app.put("/v1/permissions", async (c) => {
     const body = await c.req.json();
-    store.permissions = PermissionsConfigSchema.parse(body);
+    store.setPermissions(PermissionsConfigSchema.parse(body));
     return c.json(store.permissions);
   });
 
@@ -107,6 +108,13 @@ export function createApp() {
     const body = DeleteRequestSchema.parse(await c.req.json());
     const result = store.deleteByScope(body.scope);
     return c.json({ ...result, scope: body.scope });
+  });
+
+  /** Local MVP helper: seed demo windows + enable collection. */
+  app.post("/v1/demo/seed", async (c) => {
+    const body = (await c.req.json().catch(() => ({}))) as { enable?: boolean };
+    const result = seedDemoData({ enable: body.enable !== false });
+    return c.json({ ok: true, ...result });
   });
 
   /**

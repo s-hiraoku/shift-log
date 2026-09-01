@@ -6,12 +6,31 @@ import type {
   WindowMetadata,
   WindowUpload,
 } from "@shift-log/schema";
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import path from "node:path";
 import { PermissionsConfigSchema, RAW_EVENT_RETENTION_HOURS } from "@shift-log/schema";
 
 export type StoredWindow = {
   metadata: WindowMetadata;
   events: InteractionEvent[];
   uploaded_at: string;
+};
+
+function persistEnabled(): boolean {
+  if (process.env.VITEST) return false;
+  if (process.env.SHIFTLOG_PERSIST === "0") return false;
+  return Boolean(process.env.SHIFTLOG_DATA_DIR);
+}
+
+function storeFilePath(): string {
+  const dir = process.env.SHIFTLOG_DATA_DIR ?? path.resolve("data");
+  return path.join(dir, "store.json");
+}
+
+type PersistedSnapshot = {
+  permissions: PermissionsConfig;
+  windows: StoredWindow[];
+  memories: MemoryRecord[];
 };
 
 function hoursAgo(hours: number, from = new Date()): Date {
@@ -59,10 +78,44 @@ export class MemoryStore {
   memories = new Map<string, MemoryRecord>();
   permissions: PermissionsConfig = PermissionsConfigSchema.parse({});
 
+  constructor() {
+    this.loadFromDisk();
+  }
+
+  loadFromDisk(): void {
+    if (!persistEnabled()) return;
+    const file = storeFilePath();
+    if (!existsSync(file)) return;
+    try {
+      const raw = JSON.parse(readFileSync(file, "utf8")) as PersistedSnapshot;
+      this.permissions = PermissionsConfigSchema.parse(raw.permissions ?? {});
+      this.windows = new Map(
+        (raw.windows ?? []).map((w) => [w.metadata.window_id, w]),
+      );
+      this.memories = new Map((raw.memories ?? []).map((m) => [m.id, m]));
+      this.purgeExpiredRawEvents();
+    } catch (err) {
+      console.error("[store] failed to load persisted data:", err);
+    }
+  }
+
+  persistToDisk(): void {
+    if (!persistEnabled()) return;
+    const file = storeFilePath();
+    mkdirSync(path.dirname(file), { recursive: true });
+    const snapshot: PersistedSnapshot = {
+      permissions: this.permissions,
+      windows: [...this.windows.values()],
+      memories: [...this.memories.values()],
+    };
+    writeFileSync(file, JSON.stringify(snapshot, null, 2), "utf8");
+  }
+
   reset(): void {
     this.windows.clear();
     this.memories.clear();
     this.permissions = PermissionsConfigSchema.parse({});
+    this.persistToDisk();
   }
 
   putWindow(upload: WindowUpload, now = new Date()): StoredWindow | null {
@@ -75,6 +128,7 @@ export class MemoryStore {
       uploaded_at: now.toISOString(),
     };
     this.windows.set(upload.metadata.window_id, stored);
+    this.persistToDisk();
     return stored;
   }
 
@@ -105,6 +159,7 @@ export class MemoryStore {
 
   putMemory(record: MemoryRecord): void {
     this.memories.set(record.id, record);
+    this.persistToDisk();
   }
 
   /** Discard raw events whose capture window ended more than 48h ago. */
@@ -154,7 +209,14 @@ export class MemoryStore {
       }
     }
 
+    this.persistToDisk();
     return { deleted_windows, deleted_memories };
+  }
+
+  /** Replace permissions and persist. */
+  setPermissions(next: PermissionsConfig): void {
+    this.permissions = next;
+    this.persistToDisk();
   }
 }
 

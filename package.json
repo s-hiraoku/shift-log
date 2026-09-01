@@ -2,14 +2,18 @@
   "name": "shift-log",
   "private": true,
   "version": "0.1.0",
-  "description": "ShiftLog — permission-based activity memory for cloud agents (Computer History compatible)",
+  "description": "ShiftLog \u2014 permission-based activity memory for cloud agents (Computer History compatible)",
   "packageManager": "pnpm@10.33.3",
   "scripts": {
     "build": "pnpm -r run build",
     "dev": "pnpm -r --parallel run dev",
     "test": "pnpm -r run test",
     "lint": "pnpm -r run lint",
-    "typecheck": "pnpm -r run typecheck"
+    "typecheck": "pnpm -r run typecheck",
+    "dev:api": "pnpm --filter @shift-log/api dev",
+    "dev:web": "pnpm --filter @shift-log/web dev",
+    "demo:desktop": "pnpm --filter @shift-log/desktop demo",
+    "seed": "curl -s -X POST -H \"Authorization: Bearer ${SHIFTLOG_API_TOKEN:-dev-token}\" -H \"Content-Type: application/json\" -d '{\"enable\":true}' \"${SHIFTLOG_API_ORIGIN:-http://localhost:8787}/v1/demo/seed\""
   },
   "engines": {
     "node": ">=20"
