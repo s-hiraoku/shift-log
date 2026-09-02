@@ -39,13 +39,13 @@ function demoWindow(opts: {
 }
 
 /** Seed recent windows so timeline/settings flows work without a real OS collector. */
-export function seedDemoData(
+export async function seedDemoData(
   opts: { enable?: boolean; store?: MemoryStore } = {},
-): {
+): Promise<{
   windows: number;
   memories: number;
   permissions_enabled: boolean;
-} {
+}> {
   const store = opts.store ?? defaultStore;
   if (opts.enable !== false) {
     store.setPermissions(
@@ -164,7 +164,7 @@ export function seedDemoData(
     const upload = sanitizeWindowUpload(raw);
     const stored = store.putWindow(upload);
     if (!stored) continue;
-    summarizeTenMinuteWindow(store, upload);
+    await summarizeTenMinuteWindow(store, upload);
     windows += 1;
   }
 

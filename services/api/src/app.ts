@@ -9,10 +9,14 @@ import {
   canCollect,
 } from "@shift-log/schema";
 import { requireAuth } from "./middleware/auth.js";
+import { rateLimit } from "./middleware/rate-limit.js";
+import { audit } from "./lib/audit.js";
 import { sanitizeWindowUpload } from "./lib/sanitize.js";
-import { isRawWindowExpired, storeFor, type MemoryStore } from "./lib/store.js";
+import { isRawWindowExpired, purgeAllTenants, storeFor, type MemoryStore } from "./lib/store.js";
 import { summarizeSixHourBundle, summarizeTenMinuteWindow } from "./jobs/summarize.js";
 import { seedDemoData } from "./lib/demo.js";
+
+const MAX_UPLOAD_BYTES = Number(process.env.SHIFTLOG_MAX_UPLOAD_BYTES ?? 512_000);
 
 type AppEnv = {
   Variables: {
@@ -40,9 +44,53 @@ export function createApp() {
     }),
   );
 
+  app.use("*", async (c, next) => {
+    const started = Date.now();
+    await next();
+    if (c.req.path === "/health") return;
+    let userId: string | undefined;
+    try {
+      userId = c.get("userId");
+    } catch {
+      userId = undefined;
+    }
+    audit({
+      type: "http",
+      userId,
+      method: c.req.method,
+      path: c.req.path,
+      status: c.res.status,
+      ms: Date.now() - started,
+    });
+  });
+
   app.get("/health", (c) => c.json({ ok: true, service: "shift-log-api" }));
 
+  app.get("/internal/cron/purge", async (c) => {
+    const expected = process.env.CRON_SECRET;
+    const presented =
+      c.req.header("x-cron-secret") ??
+      c.req.header("authorization")?.replace(/^Bearer\s+/i, "") ??
+      c.req.query("secret") ??
+      "";
+    if (!expected || presented !== expected) {
+      return c.json({ error: "unauthorized" }, 401);
+    }
+    const removed = purgeAllTenants();
+    audit({ type: "retention_purge", extra: { removed } });
+    return c.json({ ok: true, removed });
+  });
+
   app.use("/v1/*", requireAuth());
+  app.use("/v1/*", rateLimit());
+
+  app.use("/v1/windows", async (c, next) => {
+    const len = Number(c.req.header("content-length") ?? 0);
+    if (len > MAX_UPLOAD_BYTES) {
+      return c.json({ error: "payload_too_large", max: MAX_UPLOAD_BYTES }, 413);
+    }
+    await next();
+  });
 
   app.get("/v1/permissions", (c) => c.json(tenant(c).permissions));
 
@@ -66,7 +114,16 @@ export function createApp() {
       );
     }
 
-    const body = await c.req.json();
+    const text = await c.req.text();
+    if (Buffer.byteLength(text) > MAX_UPLOAD_BYTES) {
+      return c.json({ error: "payload_too_large", max: MAX_UPLOAD_BYTES }, 413);
+    }
+    let body: unknown;
+    try {
+      body = JSON.parse(text);
+    } catch {
+      return c.json({ error: "invalid_json" }, 400);
+    }
     const parsed = WindowUploadSchema.parse(body);
     const upload = sanitizeWindowUpload(parsed);
     store.purgeExpiredRawEvents();
@@ -83,7 +140,7 @@ export function createApp() {
     }
 
     store.putWindow(upload);
-    summarizeTenMinuteWindow(store, upload);
+    await summarizeTenMinuteWindow(store, upload);
 
     const recentTen = store
       .listMemories({ limit: 36 })
@@ -134,7 +191,7 @@ export function createApp() {
   /** Local MVP helper: seed demo windows + enable collection. */
   app.post("/v1/demo/seed", async (c) => {
     const body = (await c.req.json().catch(() => ({}))) as { enable?: boolean };
-    const result = seedDemoData({
+    const result = await seedDemoData({
       enable: body.enable !== false,
       store: tenant(c),
     });

@@ -1,6 +1,7 @@
-import { beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { createApp } from "./app.js";
 import { store } from "./lib/store.js";
+import { resetRateLimitBuckets } from "./middleware/rate-limit.js";
 
 const token = "dev-token";
 
@@ -37,10 +38,21 @@ function expiredWindow(windowId: string) {
 
 describe("ShiftLog API", () => {
   const app = createApp();
+  const originalCron = process.env.CRON_SECRET;
+  const originalLimit = process.env.SHIFTLOG_RATE_LIMIT_PER_MIN;
 
   beforeEach(() => {
     store.reset();
     process.env.SHIFTLOG_API_TOKEN = token;
+    resetRateLimitBuckets();
+  });
+
+  afterEach(() => {
+    if (originalCron === undefined) delete process.env.CRON_SECRET;
+    else process.env.CRON_SECRET = originalCron;
+    if (originalLimit === undefined) delete process.env.SHIFTLOG_RATE_LIMIT_PER_MIN;
+    else process.env.SHIFTLOG_RATE_LIMIT_PER_MIN = originalLimit;
+    resetRateLimitBuckets();
   });
 
   it("rejects unauthenticated requests", async () => {
@@ -279,5 +291,39 @@ describe("ShiftLog API", () => {
     expect(body.windows).toBeGreaterThan(0);
     expect(body.permissions_enabled).toBe(true);
     expect(store.memories.size).toBeGreaterThan(0);
+  });
+
+  it("rejects oversize uploads", async () => {
+    const res = await app.request("/v1/windows", {
+      method: "POST",
+      headers: {
+        ...authHeaders(),
+        "content-length": "999999",
+      },
+      body: "{}",
+    });
+    expect(res.status).toBe(413);
+  });
+
+  it("rate-limits a tenant after the per-minute budget", async () => {
+    process.env.SHIFTLOG_RATE_LIMIT_PER_MIN = "2";
+    resetRateLimitBuckets();
+    const first = await app.request("/v1/permissions", { headers: authHeaders() });
+    const second = await app.request("/v1/permissions", { headers: authHeaders() });
+    const third = await app.request("/v1/permissions", { headers: authHeaders() });
+    expect(first.status).toBe(200);
+    expect(second.status).toBe(200);
+    expect(third.status).toBe(429);
+  });
+
+  it("requires CRON_SECRET for retention purge", async () => {
+    process.env.CRON_SECRET = "cron-test-secret";
+    const denied = await app.request("/internal/cron/purge");
+    expect(denied.status).toBe(401);
+    const ok = await app.request("/internal/cron/purge", {
+      headers: { authorization: "Bearer cron-test-secret" },
+    });
+    expect(ok.status).toBe(200);
+    expect((await ok.json()).ok).toBe(true);
   });
 });

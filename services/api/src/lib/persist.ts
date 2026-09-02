@@ -170,6 +170,11 @@ let cached: Backend | null | undefined;
 function openBackend(): Backend | null {
   if (!isPersistEnabled()) return null;
   if (cached !== undefined) return cached;
+  if (process.env.VERCEL && !isPostgresUrl()) {
+    console.warn(
+      "[persist] Vercel requires DATABASE_URL (Postgres/Neon). SQLite is not durable on serverless.",
+    );
+  }
   if (isPostgresUrl()) {
     cached = new PostgresBackend(process.env.DATABASE_URL!);
     return cached;
