@@ -71,6 +71,8 @@ Web UI は `/api/*` の Route Handler 経由で API を呼び、Bearer トーク
 
 `apps/desktop` は Next.js の UI を同梱した Tauri v2 アプリで、バックグラウンド収集エージェント（v1 はスタブ）を起動し、**GitHub Releases 経由で自動更新**します。
 
+エンドユーザ向けのインストール手順は [デスクトップアプリ インストールガイド](docs/desktop-install-guide.md) を参照してください。
+
 ### 開発
 
 ```bash
