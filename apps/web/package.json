@@ -5,6 +5,7 @@
   "scripts": {
     "dev": "next dev --port 3000",
     "build": "next build",
+    "build:desktop": "node scripts/build-desktop-export.mjs",
     "start": "next start",
     "test": "vitest run",
     "typecheck": "tsc -p tsconfig.json --noEmit",
