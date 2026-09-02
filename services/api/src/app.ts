@@ -10,28 +10,51 @@ import {
 } from "@shift-log/schema";
 import { requireAuth } from "./middleware/auth.js";
 import { sanitizeWindowUpload } from "./lib/sanitize.js";
-import { isRawWindowExpired, store } from "./lib/store.js";
+import { isRawWindowExpired, storeFor, type MemoryStore } from "./lib/store.js";
 import { summarizeSixHourBundle, summarizeTenMinuteWindow } from "./jobs/summarize.js";
 import { seedDemoData } from "./lib/demo.js";
 
-export function createApp() {
-  const app = new Hono();
+type AppEnv = {
+  Variables: {
+    userId: string;
+  };
+};
 
-  app.use("*", cors());
+function tenant(c: { get: (k: "userId") => string }): MemoryStore {
+  return storeFor(c.get("userId"));
+}
+
+function corsOrigin(): string | string[] {
+  const raw = process.env.SHIFTLOG_CORS_ORIGINS;
+  if (!raw || raw.trim() === "*") return "*";
+  return raw.split(",").map((s) => s.trim()).filter(Boolean);
+}
+
+export function createApp() {
+  const app = new Hono<AppEnv>();
+
+  app.use(
+    "*",
+    cors({
+      origin: corsOrigin(),
+    }),
+  );
 
   app.get("/health", (c) => c.json({ ok: true, service: "shift-log-api" }));
 
   app.use("/v1/*", requireAuth());
 
-  app.get("/v1/permissions", (c) => c.json(store.permissions));
+  app.get("/v1/permissions", (c) => c.json(tenant(c).permissions));
 
   app.put("/v1/permissions", async (c) => {
     const body = await c.req.json();
+    const store = tenant(c);
     store.setPermissions(PermissionsConfigSchema.parse(body));
     return c.json(store.permissions);
   });
 
   app.post("/v1/windows", async (c) => {
+    const store = tenant(c);
     if (!canCollect(store.permissions)) {
       return c.json(
         {
@@ -85,13 +108,11 @@ export function createApp() {
       limit: c.req.query("limit") ?? "50",
       cursor: c.req.query("cursor"),
     });
-    const items = store.listMemories(query);
-    return c.json({ items, next_cursor: null });
+    return c.json({ items: tenant(c).listMemories(query), next_cursor: null });
   });
 
   app.get("/v1/memories/:id", (c) => {
-    const id = c.req.param("id");
-    const memory = store.getMemory(id);
+    const memory = tenant(c).getMemory(c.req.param("id"));
     if (!memory) return c.json({ error: "not_found" }, 404);
     return c.json(memory);
   });
@@ -101,19 +122,22 @@ export function createApp() {
       q: c.req.query("q") ?? "",
       limit: c.req.query("limit") ?? "50",
     });
-    return c.json({ items: store.listMemories(query) });
+    return c.json({ items: tenant(c).listMemories(query) });
   });
 
   app.post("/v1/history/delete", async (c) => {
     const body = DeleteRequestSchema.parse(await c.req.json());
-    const result = store.deleteByScope(body.scope);
+    const result = tenant(c).deleteByScope(body.scope);
     return c.json({ ...result, scope: body.scope });
   });
 
   /** Local MVP helper: seed demo windows + enable collection. */
   app.post("/v1/demo/seed", async (c) => {
     const body = (await c.req.json().catch(() => ({}))) as { enable?: boolean };
-    const result = seedDemoData({ enable: body.enable !== false });
+    const result = seedDemoData({
+      enable: body.enable !== false,
+      store: tenant(c),
+    });
     return c.json({ ok: true, ...result });
   });
 
@@ -123,7 +147,7 @@ export function createApp() {
    */
   app.get("/v1/agent/recent", (c) => {
     const limit = Number(c.req.query("limit") ?? "12");
-    const memories = store.listMemories({ limit: Math.min(limit, 36) });
+    const memories = tenant(c).listMemories({ limit: Math.min(limit, 36) });
     return c.json({
       mode: "context_only",
       memories,
@@ -135,7 +159,7 @@ export function createApp() {
     const body = ContinueContextRequestSchema.parse(
       (await c.req.json().catch(() => ({}))) ?? {},
     );
-    const memories = store.listMemories({ limit: body.limit });
+    const memories = tenant(c).listMemories({ limit: body.limit });
     return c.json({
       mode: "context_only" as const,
       prompt: body.prompt,

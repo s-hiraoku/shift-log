@@ -6,6 +6,7 @@ import {
   type WindowUpload,
   WINDOW_DURATION_MINUTES,
 } from "@shift-log/schema";
+import { observeFrontWindow, type FrontWindow } from "./os-observe.js";
 
 /**
  * Desktop collector (v1 stub).
@@ -111,14 +112,90 @@ export class DesktopCollector {
   }
 }
 
-/** Demo loop for local development — not a production accessibility hook. */
+function requireToken(): string {
+  const token = process.env.SHIFTLOG_API_TOKEN;
+  if (token) return token;
+  if (process.env.SHIFTLOG_ALLOW_INSECURE_DEV === "1") return "dev-token";
+  throw new Error(
+    "SHIFTLOG_API_TOKEN is required for the collector (fail-closed). Set SHIFTLOG_ALLOW_INSECURE_DEV=1 only for local demos.",
+  );
+}
+
+function emitDemoTick(
+  collector: DesktopCollector,
+  apps: string[],
+  appIdx: number,
+): number {
+  const app = apps[appIdx % apps.length]!;
+  const now = new Date().toISOString();
+  collector.observe({
+    id: `tick_switch_${Date.now()}`,
+    type: "app_switch",
+    ts: now,
+    app,
+    summary: `Demo focus: ${app}`,
+  });
+  collector.observe({
+    id: `tick_front_${Date.now()}`,
+    type: "front_window_summary",
+    ts: now,
+    app,
+    summary: `Demo window summary for ${app}`,
+  });
+  return appIdx + 1;
+}
+
+export function emitOsTick(
+  collector: DesktopCollector,
+  observed: FrontWindow,
+  last: { app: string; title: string } | null,
+): { app: string; title: string } {
+  const now = new Date().toISOString();
+  if (observed.privateBrowsing) return last ?? { app: observed.app, title: observed.title };
+  if (!last || last.app !== observed.app) {
+    collector.observe({
+      id: `os_switch_${Date.now()}`,
+      type: "app_switch",
+      ts: now,
+      app: observed.app,
+      site: observed.site,
+      summary: `Focused ${observed.app}`,
+    });
+  }
+  if (observed.site && (!last || last.title !== observed.title)) {
+    collector.observe({
+      id: `os_nav_${Date.now()}`,
+      type: "browser_navigation",
+      ts: now,
+      app: observed.app,
+      site: observed.site,
+      summary: observed.title.slice(0, 200) || observed.site,
+    });
+  } else if (!last || last.title !== observed.title) {
+    collector.observe({
+      id: `os_front_${Date.now()}`,
+      type: "front_window_summary",
+      ts: now,
+      app: observed.app,
+      site: observed.site,
+      summary: observed.title.slice(0, 200) || observed.app,
+    });
+  }
+  return { app: observed.app, title: observed.title };
+}
+
+/**
+ * Collector loop. Default: observe the real frontmost window (macOS / Linux).
+ * `--demo` keeps the previous synthetic loop for CI / machines without OS hooks.
+ * Never captures screenshots, mic, system audio, or keystroke text.
+ */
 export async function main(): Promise<void> {
   const apiBase = process.env.SHIFTLOG_API_ORIGIN ?? "http://localhost:8787";
-  const token = process.env.SHIFTLOG_API_TOKEN ?? "dev-token";
+  const token = requireToken();
   const demo = process.argv.includes("--demo") || process.env.SHIFTLOG_DEMO === "1";
-  const tickMs = Number(process.env.SHIFTLOG_DEMO_TICK_MS ?? (demo ? 15_000 : 60_000));
+  const tickMs = Number(process.env.SHIFTLOG_TICK_MS ?? (demo ? 15_000 : 5_000));
   const flushMs = Number(
-    process.env.SHIFTLOG_FLUSH_MS ?? (demo ? 60_000 : WINDOW_DURATION_MINUTES * 60 * 1000),
+    process.env.SHIFTLOG_FLUSH_MS ?? WINDOW_DURATION_MINUTES * 60 * 1000,
   );
 
   async function loadPermissions(): Promise<PermissionsConfig> {
@@ -141,8 +218,9 @@ export async function main(): Promise<void> {
   );
   console.log(`[desktop] tick=${tickMs}ms flush=${flushMs}ms`);
 
-  const apps = ["Code", "Chrome", "Terminal", "Slack", "Notion"];
-  let appIdx = 0;
+  const demoApps = ["Code", "Chrome", "Terminal", "Slack", "Notion"];
+  let demoIdx = 0;
+  let lastFront: { app: string; title: string } | null = null;
   let windowStart = new Date();
 
   async function flush(): Promise<void> {
@@ -167,51 +245,35 @@ export async function main(): Promise<void> {
     console.log(`[desktop] uploaded window ${upload.metadata.window_id} status=${res.status} ${body}`);
   }
 
-  function tick(): void {
+  async function tick(): Promise<void> {
     if (!canCollect(permissions) && !demo) return;
-    const app = apps[appIdx % apps.length]!;
-    appIdx += 1;
-    const now = new Date().toISOString();
-    collector.observe({
-      id: `tick_switch_${Date.now()}`,
-      type: "app_switch",
-      ts: now,
-      app,
-      summary: demo ? `Demo focus: ${app}` : `Focused ${app}`,
-    });
-    collector.observe({
-      id: `tick_type_${Date.now()}`,
-      type: "typing_presence",
-      ts: now,
-      app,
-      typing: { active: true, approxChars: 20 + (appIdx % 40) },
-      summary: "Typing presence (content not captured)",
-    });
-    if (appIdx % 3 === 0) {
-      collector.observe({
-        id: `tick_front_${Date.now()}`,
-        type: "front_window_summary",
-        ts: now,
-        app,
-        summary: demo ? `Demo window summary for ${app}` : `Front window: ${app}`,
-      });
+    if (demo) {
+      demoIdx = emitDemoTick(collector, demoApps, demoIdx);
+      return;
     }
+    const observed = await observeFrontWindow();
+    if (!observed) {
+      console.warn("[desktop] front window unavailable (need Accessibility / xdotool)");
+      return;
+    }
+    lastFront = emitOsTick(collector, observed, lastFront);
+    console.log(`[desktop] observed app=${observed.app} title=${observed.title.slice(0, 80)}`);
   }
 
-  // Always emit one initial observation so a single run is useful.
-  tick();
+  await tick();
 
   if (!demo && process.env.SHIFTLOG_ONCE === "1") {
     await flush();
     return;
   }
 
-  setInterval(tick, tickMs);
+  setInterval(() => {
+    void tick();
+  }, tickMs);
   setInterval(() => {
     void flush();
   }, flushMs);
 
-  // Keep process alive
   await new Promise(() => {});
 }
 

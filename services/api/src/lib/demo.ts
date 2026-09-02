@@ -1,7 +1,7 @@
 import type { InteractionEvent, WindowUpload } from "@shift-log/schema";
 import { PermissionsConfigSchema } from "@shift-log/schema";
 import { sanitizeWindowUpload } from "./sanitize.js";
-import { store } from "./store.js";
+import { store as defaultStore, type MemoryStore } from "./store.js";
 import { summarizeTenMinuteWindow } from "../jobs/summarize.js";
 
 function minutesAgo(mins: number, from = new Date()): Date {
@@ -39,11 +39,14 @@ function demoWindow(opts: {
 }
 
 /** Seed recent windows so timeline/settings flows work without a real OS collector. */
-export function seedDemoData(opts: { enable?: boolean } = {}): {
+export function seedDemoData(
+  opts: { enable?: boolean; store?: MemoryStore } = {},
+): {
   windows: number;
   memories: number;
   permissions_enabled: boolean;
 } {
+  const store = opts.store ?? defaultStore;
   if (opts.enable !== false) {
     store.setPermissions(
       PermissionsConfigSchema.parse({

@@ -61,16 +61,16 @@ pnpm dev:web          # http://localhost:3000
 
 - 設定で収集 ON/OFF・一時停止・履歴削除
 - 十分窓のアップロード → Markdown 記憶化 → タイムライン/検索
-- デスクトップの `--demo` 連続コレクタ（OS フックの代わりに安全な擬似イベント）
-- ファイル永続化（`SHIFTLOG_DATA_DIR`、デフォルト `./data`）
+- デスクトップ実収集（macOS: System Events / Linux: xdotool または xprop）。`--demo` は擬似イベント
+- SQLite 永続化（`SHIFTLOG_DATA_DIR/shiftlog.db`）または Postgres（`DATABASE_URL`）
+- ユーザ単位のデータ分離（`SHIFTLOG_API_TOKENS`）。トークン未設定時は起動拒否（fail-closed）
 - エージェント向け `context_only`（Computer Use なし）
 
 ### まだスタブのもの
 
-- 実 OS のアクセシビリティ / メニューバー常駐
-- スマホネイティブ連携
+- メニューバー常駐 UI / スマホネイティブ連携
 - LLM 要約（現状は決定論的テンプレート）
-- マルチユーザー認証（共有 Bearer）
+- OS コード署名・公証
 
 
 ## セットアップ
@@ -85,10 +85,20 @@ pnpm --filter @shift-log/web dev          # http://localhost:3000
 環境変数（サーバー側のみ — `NEXT_PUBLIC_*` にトークンを置かない）:
 
 ```bash
-SHIFTLOG_API_TOKEN=dev-token
+SHIFTLOG_API_TOKEN=dev-token          # 必須。未設定なら起動しない
+# SHIFTLOG_API_TOKENS=alice:s1,bob:s2  # 任意。ユーザ単位でデータ分離
 SHIFTLOG_API_ORIGIN=http://localhost:8787
-SHIFTLOG_DATA_DIR=./data
+SHIFTLOG_DATA_DIR=./data               # SQLite: data/shiftlog.db
+# DATABASE_URL=postgresql://...        # ある場合は Postgres を使う
 ```
+
+実収集（設定で有効化したあと）:
+
+```bash
+SHIFTLOG_API_TOKEN=dev-token pnpm --filter @shift-log/desktop dev
+```
+
+macOS は初回にアクセシビリティ許可、Linux は `xdotool`（なければ `xprop`）が必要です。
 
 Web UI は `/api/*` の Route Handler 経由で API を呼び、Bearer トークンはサーバー側で付与します。
 

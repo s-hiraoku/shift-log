@@ -10,7 +10,8 @@
     "test": "vitest run",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "lint": "tsc -p tsconfig.json --noEmit",
-    "demo": "tsx src/collector.ts --demo"
+    "demo": "tsx src/collector.ts --demo",
+    "collect": "tsx src/collector.ts"
   },
   "dependencies": {
     "@shift-log/schema": "workspace:*"
