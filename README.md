@@ -67,6 +67,42 @@ Web UI は `/api/*` の Route Handler 経由で API を呼び、Bearer トーク
 - API: `services/api` を別プロジェクトにし、`api/index.ts` をエントリに使用
 - またはルートの `vercel.json` で API ルートを紐付け
 
+## デスクトップアプリ（Tauri v2 / macOS・Linux）
+
+`apps/desktop` は Next.js の UI を同梱した Tauri v2 アプリで、バックグラウンド収集エージェント（v1 はスタブ）を起動し、**GitHub Releases 経由で自動更新**します。
+
+### 開発
+
+```bash
+# Linux ビルド依存（Ubuntu 例）
+sudo apt-get install -y libwebkit2gtk-4.1-dev libgtk-3-dev librsvg2-dev \
+  patchelf libayatana-appindicator3-dev xdg-utils
+
+# UI を直接叩く API のオリジン/トークン（未署名 PoC 用）
+export NEXT_PUBLIC_SHIFTLOG_API_BASE=http://localhost:8787
+export NEXT_PUBLIC_SHIFTLOG_API_TOKEN=dev-token
+
+pnpm --filter @shift-log/desktop app:dev     # 開発起動（devUrl: :3000）
+pnpm --filter @shift-log/desktop app:build    # インストーラ + updater 生成
+```
+
+Web ビルドは非破壊です。`SHIFTLOG_DESKTOP=1` のときだけ Next.js が `output: "export"` になり、`build:desktop` が静的エクスポート（`apps/web/out`）を生成します。デスクトップは `/api` プロキシを使わず API を直接呼ぶため、トークンはビルド時に埋め込みます（PoC のみ。製品版は Tauri/OS キーチェーン側で保持してください）。
+
+### リリースと自動更新
+
+1. 更新用署名鍵を生成: `pnpm --filter @shift-log/desktop tauri signer generate`
+2. リポジトリに Secrets を登録:
+   - `TAURI_SIGNING_PRIVATE_KEY`（秘密鍵の中身）
+   - `TAURI_SIGNING_PRIVATE_KEY_PASSWORD`（無ければ空）
+   - `SHIFTLOG_API_TOKEN` と Variables `SHIFTLOG_API_BASE`
+3. 公開鍵を `apps/desktop/src-tauri/tauri.conf.json` の `plugins.updater.pubkey` に設定
+4. タグを push: `git tag desktop-v0.1.0 && git push --tags`
+   - GitHub Actions（`.github/workflows/desktop-release.yml`）が mac/linux をビルドし、
+     `latest.json` 付きで Release にアップロード
+5. 既存インストールは次回起動時に自動更新（署名検証つき）
+
+未署名 PoC のため、OS のコード署名/公証（Apple Developer 証明書・Windows 署名）は未対応です。配布時の警告を消すには別途証明書が必要です。
+
 ## テスト
 
 ```bash
