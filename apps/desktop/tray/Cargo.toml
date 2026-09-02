@@ -1,0 +1,8 @@
+[package]
+name = "shiftlog-tray"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+tray-icon = "0.19"
+tao = "0.32"

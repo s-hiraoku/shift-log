@@ -7,6 +7,8 @@ import {
   WINDOW_DURATION_MINUTES,
 } from "@shift-log/schema";
 import { observeFrontWindow, type FrontWindow } from "./os-observe.js";
+import { getApiToken } from "./credentials.js";
+import { startControlServer, type ControlState } from "./control-server.js";
 
 /**
  * Desktop collector (v1 stub).
@@ -27,6 +29,10 @@ export class DesktopCollector {
 
   setPermissions(permissions: PermissionsConfig): void {
     this.permissions = permissions;
+  }
+
+  isPaused(): boolean {
+    return this.pausedLocal || this.permissions.paused;
   }
 
   /** Menu bar: Pause */
@@ -112,12 +118,13 @@ export class DesktopCollector {
   }
 }
 
-function requireToken(): string {
-  const token = process.env.SHIFTLOG_API_TOKEN;
-  if (token) return token;
+async function resolveToken(): Promise<string> {
+  if (process.env.SHIFTLOG_API_TOKEN) return process.env.SHIFTLOG_API_TOKEN;
+  const stored = await getApiToken();
+  if (stored) return stored;
   if (process.env.SHIFTLOG_ALLOW_INSECURE_DEV === "1") return "dev-token";
   throw new Error(
-    "SHIFTLOG_API_TOKEN is required for the collector (fail-closed). Set SHIFTLOG_ALLOW_INSECURE_DEV=1 only for local demos.",
+    "SHIFTLOG_API_TOKEN is required (env or OS keychain). Run: pnpm --filter @shift-log/desktop credentials set <token>",
   );
 }
 
@@ -191,7 +198,7 @@ export function emitOsTick(
  */
 export async function main(): Promise<void> {
   const apiBase = process.env.SHIFTLOG_API_ORIGIN ?? "http://localhost:8787";
-  const token = requireToken();
+  const token = await resolveToken();
   const demo = process.argv.includes("--demo") || process.env.SHIFTLOG_DEMO === "1";
   const tickMs = Number(process.env.SHIFTLOG_TICK_MS ?? (demo ? 15_000 : 5_000));
   const flushMs = Number(
@@ -222,6 +229,7 @@ export async function main(): Promise<void> {
   let demoIdx = 0;
   let lastFront: { app: string; title: string } | null = null;
   let windowStart = new Date();
+  const control: ControlState = { paused: collector.isPaused() };
 
   async function flush(): Promise<void> {
     try {
@@ -257,7 +265,13 @@ export async function main(): Promise<void> {
       return;
     }
     lastFront = emitOsTick(collector, observed, lastFront);
+    control.lastApp = observed.app;
+    control.lastObserveAt = new Date().toISOString();
     console.log(`[desktop] observed app=${observed.app} title=${observed.title.slice(0, 80)}`);
+  }
+
+  if (process.env.SHIFTLOG_ONCE !== "1") {
+    startControlServer(collector, control);
   }
 
   await tick();
@@ -268,7 +282,9 @@ export async function main(): Promise<void> {
   }
 
   setInterval(() => {
-    void tick();
+    void tick().then(() => {
+      control.paused = collector.isPaused();
+    });
   }, tickMs);
   setInterval(() => {
     void flush();
