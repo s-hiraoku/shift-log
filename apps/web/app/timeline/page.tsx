@@ -56,7 +56,7 @@ export default function TimelinePage() {
             items.map((m) => (
               <li key={m.id}>
                 <div className="row">
-                  <Link href={`/memories/${m.id}`}>
+                  <Link href={`/memories?id=${encodeURIComponent(m.id)}`}>
                     <strong>{m.front_matter.title}</strong>
                   </Link>
                   <span className="badge">{m.front_matter.kind}</span>

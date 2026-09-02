@@ -1,23 +1,41 @@
 "use client";
 
 import Link from "next/link";
-import { useParams } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useSearchParams } from "next/navigation";
+import { Suspense, useEffect, useState } from "react";
 import type { MemoryRecord } from "@shift-log/schema";
 import { serializeMemoryMarkdown } from "@shift-log/schema";
 import { apiFetch } from "@/lib/api";
 
-export default function MemoryDetailClient() {
-  const params = useParams<{ id: string }>();
+/**
+ * Memory detail is a query-param route (`/memories?id=…`) rather than a
+ * dynamic path segment. A single static page works reliably as an SPA in
+ * both the web build and the Tauri static export (no per-id HTML files,
+ * so client-side navigation never falls through to a missing asset).
+ */
+function MemoryDetail() {
+  const searchParams = useSearchParams();
+  const id = searchParams.get("id");
   const [memory, setMemory] = useState<MemoryRecord | null>(null);
   const [error, setError] = useState("");
 
   useEffect(() => {
-    if (!params.id) return;
-    apiFetch<MemoryRecord>(`/v1/memories/${params.id}`)
+    if (!id) return;
+    setMemory(null);
+    setError("");
+    apiFetch<MemoryRecord>(`/v1/memories/${id}`)
       .then(setMemory)
       .catch((e) => setError(String(e)));
-  }, [params.id]);
+  }, [id]);
+
+  if (!id) {
+    return (
+      <div className="card">
+        <p className="muted">記憶が選択されていません。</p>
+        <Link href="/timeline">タイムラインへ</Link>
+      </div>
+    );
+  }
 
   if (error) {
     return (
@@ -54,5 +72,13 @@ export default function MemoryDetailClient() {
         <pre className="memory">{serializeMemoryMarkdown(memory)}</pre>
       </section>
     </div>
+  );
+}
+
+export default function MemoryDetailPage() {
+  return (
+    <Suspense fallback={<p className="muted">読み込み中…</p>}>
+      <MemoryDetail />
+    </Suspense>
   );
 }
