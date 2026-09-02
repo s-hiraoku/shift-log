@@ -1,0 +1,16 @@
+[Unit]
+Description=ShiftLog desktop collector
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=%h/shift-log
+EnvironmentFile=-%h/.config/shiftlog/collector.env
+ExecStart=/usr/bin/env pnpm --filter @shift-log/desktop collect
+Restart=on-failure
+RestartSec=5
+# Collector binds the menu-bar control server to 127.0.0.1 only.
+
+[Install]
+WantedBy=default.target

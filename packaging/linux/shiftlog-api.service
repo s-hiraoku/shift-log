@@ -1,0 +1,15 @@
+[Unit]
+Description=ShiftLog API
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=%h/shift-log
+EnvironmentFile=-%h/.config/shiftlog/api.env
+ExecStart=/usr/bin/env pnpm --filter @shift-log/api start
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=default.target

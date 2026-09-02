@@ -13,6 +13,7 @@ Authorization: Bearer <SHIFTLOG_API_TOKEN>
 | Method | Path | Auth | Notes |
 | --- | --- | --- | --- |
 | GET | `/health` | no | Liveness |
+| GET | `/internal/cron/purge` | `CRON_SECRET` | 48h 超の生イベントを全テナントから破棄。`Authorization: Bearer` または `x-cron-secret` |
 
 ## Permissions
 
@@ -25,7 +26,7 @@ Authorization: Bearer <SHIFTLOG_API_TOKEN>
 
 | Method | Path | Body / query | Notes |
 | --- | --- | --- | --- |
-| POST | `/v1/windows` | `WindowUpload` | Rejects if collection disabled (403) or capture older than 48h (410). Sanitizes private browsing + `keyText` |
+| POST | `/v1/windows` | `WindowUpload` | Rejects if collection disabled (403), capture older than 48h (410), or body larger than `SHIFTLOG_MAX_UPLOAD_BYTES` (413). Sanitizes private browsing + `keyText`. Optional LLM summary when `SHIFTLOG_LLM_API_KEY` is set |
 | GET | `/v1/timeline` | `q?`, `limit?`, `cursor?` | Memory list |
 | GET | `/v1/search` | `q`, `limit?` | Keyword search over title/description/body/apps |
 | GET | `/v1/memories/:id` | — | Single memory |
