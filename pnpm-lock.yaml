@@ -80,7 +80,7 @@ importers:
   packages/schema:
     dependencies:
       zod:
-        specifier: 4.5.4
+        specifier: ^4.5.4
         version: 4.5.4
     devDependencies:
       typescript:
