@@ -9,6 +9,10 @@
     {
       "name": "web",
       "command": "SHIFTLOG_API_ORIGIN=http://localhost:8787 SHIFTLOG_API_TOKEN=dev-token pnpm --filter @shift-log/web dev"
+    },
+    {
+      "name": "collector",
+      "command": "SHIFTLOG_API_ORIGIN=http://localhost:8787 SHIFTLOG_API_TOKEN=dev-token pnpm --filter @shift-log/desktop dev"
     }
   ],
   "ports": [3000, 8787]

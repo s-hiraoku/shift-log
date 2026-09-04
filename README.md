@@ -61,16 +61,18 @@ pnpm dev:web          # http://localhost:3000
 
 - 設定で収集 ON/OFF・一時停止・履歴削除
 - 十分窓のアップロード → Markdown 記憶化 → タイムライン/検索
-- デスクトップの `--demo` 連続コレクタ（OS フックの代わりに安全な擬似イベント）
-- ファイル永続化（`SHIFTLOG_DATA_DIR`、デフォルト `./data`）
+- デスクトップ実収集（macOS: System Events / Linux: xdotool または xprop）。`--demo` は擬似イベント
+- SQLite 永続化（`SHIFTLOG_DATA_DIR/shiftlog.db`）または Postgres（`DATABASE_URL`）
+- ユーザ単位のデータ分離（`SHIFTLOG_API_TOKENS`）。トークン未設定時は起動拒否（fail-closed）
+- レート制限・アップロード上限・監査ログ・48h purge（自前ホスト + Vercel Cron）
 - エージェント向け `context_only`（Computer Use なし）
+
+運用手順（常駐・キーチェーン・Cron・署名）: [`docs/ops.md`](docs/ops.md)
 
 ### まだスタブのもの
 
-- 実 OS のアクセシビリティ / メニューバー常駐
-- スマホネイティブ連携
-- LLM 要約（現状は決定論的テンプレート）
-- マルチユーザー認証（共有 Bearer）
+- スマホネイティブ収集（対象外）
+- 配布用インストーラのコード署名・公証（証明書は運用者側。手順は ops ガイド）
 
 
 ## セットアップ
@@ -85,10 +87,24 @@ pnpm --filter @shift-log/web dev          # http://localhost:3000
 環境変数（サーバー側のみ — `NEXT_PUBLIC_*` にトークンを置かない）:
 
 ```bash
-SHIFTLOG_API_TOKEN=dev-token
+SHIFTLOG_API_TOKEN=dev-token          # 必須。未設定なら起動しない
+# SHIFTLOG_API_TOKENS=alice:s1,bob:s2  # 任意。ユーザ単位でデータ分離
 SHIFTLOG_API_ORIGIN=http://localhost:8787
-SHIFTLOG_DATA_DIR=./data
+SHIFTLOG_DATA_DIR=./data               # SQLite: data/shiftlog.db
+# DATABASE_URL=postgresql://...        # Vercel では必須（Postgres）
+# CRON_SECRET=...                      # Vercel 毎時 purge
+# SHIFTLOG_LLM_API_KEY=...             # 任意。十分サマリを LLM 化
 ```
+
+実収集（設定で有効化したあと）:
+
+```bash
+pnpm --filter @shift-log/desktop credentials set "$SHIFTLOG_API_TOKEN"
+pnpm --filter @shift-log/desktop collect
+# メニュー: http://127.0.0.1:8791
+```
+
+macOS は初回にアクセシビリティ許可、Linux は `xdotool`（なければ `xprop`）が必要です。
 
 Web UI は `/api/*` の Route Handler 経由で API を呼び、Bearer トークンはサーバー側で付与します。
 
@@ -104,6 +120,7 @@ Web UI は `/api/*` の Route Handler 経由で API を呼び、Bearer トーク
 | POST | `/v1/history/delete` | 直近十分 / 一時間 / 一日 / 全部（イベントも記憶も削除） |
 | GET | `/v1/agent/recent` | エージェント向け直近記憶（読み取り） |
 | POST | `/v1/agent/continue` | 「続きやって」→ `mode: context_only` |
+| GET | `/internal/cron/purge` | 48h 生イベント破棄（`CRON_SECRET`） |
 
 ## Vercel
 

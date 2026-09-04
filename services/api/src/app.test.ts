@@ -1,6 +1,7 @@
-import { beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { createApp } from "./app.js";
 import { store } from "./lib/store.js";
+import { resetRateLimitBuckets } from "./middleware/rate-limit.js";
 
 const token = "dev-token";
 
@@ -11,12 +12,47 @@ function authHeaders(): HeadersInit {
   };
 }
 
+/** Capture times relative to now so the 48h raw-event retention never expires fixtures. */
+function recentWindow(windowId: string, opts: { minutesAgo?: number; durationMin?: number } = {}) {
+  const durationMin = opts.durationMin ?? 10;
+  const end = new Date(Date.now() - (opts.minutesAgo ?? 0) * 60_000);
+  const start = new Date(end.getTime() - durationMin * 60_000);
+  return {
+    window_id: windowId,
+    window_start: start.toISOString(),
+    window_end: end.toISOString(),
+    at: (offsetMin: number) =>
+      new Date(start.getTime() + offsetMin * 60_000).toISOString(),
+  };
+}
+
+function expiredWindow(windowId: string) {
+  const end = new Date(Date.now() - 49 * 60 * 60 * 1000);
+  const start = new Date(end.getTime() - 10 * 60_000);
+  return {
+    window_id: windowId,
+    window_start: start.toISOString(),
+    window_end: end.toISOString(),
+  };
+}
+
 describe("ShiftLog API", () => {
   const app = createApp();
+  const originalCron = process.env.CRON_SECRET;
+  const originalLimit = process.env.SHIFTLOG_RATE_LIMIT_PER_MIN;
 
   beforeEach(() => {
     store.reset();
     process.env.SHIFTLOG_API_TOKEN = token;
+    resetRateLimitBuckets();
+  });
+
+  afterEach(() => {
+    if (originalCron === undefined) delete process.env.CRON_SECRET;
+    else process.env.CRON_SECRET = originalCron;
+    if (originalLimit === undefined) delete process.env.SHIFTLOG_RATE_LIMIT_PER_MIN;
+    else process.env.SHIFTLOG_RATE_LIMIT_PER_MIN = originalLimit;
+    resetRateLimitBuckets();
   });
 
   it("rejects unauthenticated requests", async () => {
@@ -25,14 +61,15 @@ describe("ShiftLog API", () => {
   });
 
   it("blocks window upload when default-off", async () => {
+    const w = recentWindow("w1");
     const res = await app.request("/v1/windows", {
       method: "POST",
       headers: authHeaders(),
       body: JSON.stringify({
         metadata: {
-          window_id: "w1",
-          window_start: "2026-08-30T01:00:00.000Z",
-          window_end: "2026-08-30T01:10:00.000Z",
+          window_id: w.window_id,
+          window_start: w.window_start,
+          window_end: w.window_end,
           devices: ["desk"],
           dual_lane: false,
           event_count: 1,
@@ -42,7 +79,7 @@ describe("ShiftLog API", () => {
           {
             id: "e1",
             type: "click",
-            ts: "2026-08-30T01:01:00.000Z",
+            ts: w.at(1),
             device: "desk",
             app: "Code",
           },
@@ -64,14 +101,15 @@ describe("ShiftLog API", () => {
       }),
     });
 
+    const w = recentWindow("w-desk-mobile");
     const upload = await app.request("/v1/windows", {
       method: "POST",
       headers: authHeaders(),
       body: JSON.stringify({
         metadata: {
-          window_id: "w-desk-mobile",
-          window_start: "2026-08-30T01:00:00.000Z",
-          window_end: "2026-08-30T01:10:00.000Z",
+          window_id: w.window_id,
+          window_start: w.window_start,
+          window_end: w.window_end,
           devices: ["desk", "mobile"],
           dual_lane: true,
           event_count: 3,
@@ -81,7 +119,7 @@ describe("ShiftLog API", () => {
           {
             id: "e1",
             type: "app_switch",
-            ts: "2026-08-30T01:01:00.000Z",
+            ts: w.at(1),
             device: "desk",
             app: "Code",
             summary: "Editor focused",
@@ -89,7 +127,7 @@ describe("ShiftLog API", () => {
           {
             id: "e2",
             type: "typing_presence",
-            ts: "2026-08-30T01:02:00.000Z",
+            ts: w.at(2),
             device: "desk",
             app: "Code",
             typing: { active: true, approxChars: 40 },
@@ -97,7 +135,7 @@ describe("ShiftLog API", () => {
           {
             id: "e3",
             type: "browser_navigation",
-            ts: "2026-08-30T01:03:00.000Z",
+            ts: w.at(3),
             device: "mobile",
             app: "Safari",
             site: "example.com",
@@ -130,14 +168,15 @@ describe("ShiftLog API", () => {
       memories_enabled: true,
     };
 
+    const w = recentWindow("w-del");
     await app.request("/v1/windows", {
       method: "POST",
       headers: authHeaders(),
       body: JSON.stringify({
         metadata: {
-          window_id: "w-del",
-          window_start: "2026-08-30T02:00:00.000Z",
-          window_end: "2026-08-30T02:10:00.000Z",
+          window_id: w.window_id,
+          window_start: w.window_start,
+          window_end: w.window_end,
           devices: ["desk"],
           dual_lane: false,
           event_count: 1,
@@ -147,7 +186,7 @@ describe("ShiftLog API", () => {
           {
             id: "e-del",
             type: "shortcut",
-            ts: "2026-08-30T02:01:00.000Z",
+            ts: w.at(1),
             device: "desk",
             app: "Terminal",
             shortcut: "Cmd+C",
@@ -175,14 +214,15 @@ describe("ShiftLog API", () => {
       memories_enabled: true,
     };
 
+    const w = recentWindow("w-sanitize");
     const res = await app.request("/v1/windows", {
       method: "POST",
       headers: authHeaders(),
       body: JSON.stringify({
         metadata: {
-          window_id: "w-sanitize",
-          window_start: "2026-08-30T03:00:00.000Z",
-          window_end: "2026-08-30T03:10:00.000Z",
+          window_id: w.window_id,
+          window_start: w.window_start,
+          window_end: w.window_end,
           devices: ["desk"],
           dual_lane: false,
           event_count: 2,
@@ -192,7 +232,7 @@ describe("ShiftLog API", () => {
           {
             id: "private",
             type: "browser_navigation",
-            ts: "2026-08-30T03:01:00.000Z",
+            ts: w.at(1),
             device: "desk",
             app: "Chrome",
             meta: { privateBrowsing: true },
@@ -200,7 +240,7 @@ describe("ShiftLog API", () => {
           {
             id: "keys",
             type: "typing_presence",
-            ts: "2026-08-30T03:02:00.000Z",
+            ts: w.at(2),
             device: "desk",
             app: "Code",
             typing: { active: true },
@@ -229,9 +269,7 @@ describe("ShiftLog API", () => {
       headers: authHeaders(),
       body: JSON.stringify({
         metadata: {
-          window_id: "w-old",
-          window_start: "2020-01-01T00:00:00.000Z",
-          window_end: "2020-01-01T00:10:00.000Z",
+          ...expiredWindow("w-old"),
           devices: ["desk"],
           dual_lane: false,
           event_count: 0,
@@ -253,5 +291,39 @@ describe("ShiftLog API", () => {
     expect(body.windows).toBeGreaterThan(0);
     expect(body.permissions_enabled).toBe(true);
     expect(store.memories.size).toBeGreaterThan(0);
+  });
+
+  it("rejects oversize uploads", async () => {
+    const res = await app.request("/v1/windows", {
+      method: "POST",
+      headers: {
+        ...authHeaders(),
+        "content-length": "999999",
+      },
+      body: "{}",
+    });
+    expect(res.status).toBe(413);
+  });
+
+  it("rate-limits a tenant after the per-minute budget", async () => {
+    process.env.SHIFTLOG_RATE_LIMIT_PER_MIN = "2";
+    resetRateLimitBuckets();
+    const first = await app.request("/v1/permissions", { headers: authHeaders() });
+    const second = await app.request("/v1/permissions", { headers: authHeaders() });
+    const third = await app.request("/v1/permissions", { headers: authHeaders() });
+    expect(first.status).toBe(200);
+    expect(second.status).toBe(200);
+    expect(third.status).toBe(429);
+  });
+
+  it("requires CRON_SECRET for retention purge", async () => {
+    process.env.CRON_SECRET = "cron-test-secret";
+    const denied = await app.request("/internal/cron/purge");
+    expect(denied.status).toBe(401);
+    const ok = await app.request("/internal/cron/purge", {
+      headers: { authorization: "Bearer cron-test-secret" },
+    });
+    expect(ok.status).toBe(200);
+    expect((await ok.json()).ok).toBe(true);
   });
 });

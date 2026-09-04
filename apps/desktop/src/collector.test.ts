@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { PermissionsConfigSchema } from "@shift-log/schema";
-import { DesktopCollector } from "./collector.js";
+import { DesktopCollector, emitOsTick } from "./collector.js";
 
 describe("DesktopCollector", () => {
   it("does not collect when default-off", () => {
@@ -68,5 +68,30 @@ describe("DesktopCollector", () => {
     });
     const window = collector.drainWindow(new Date());
     expect(window.events.every((e) => e.type === "pause")).toBe(true);
+  });
+
+  it("emits app_switch and front_window_summary from an OS observation", () => {
+    const collector = new DesktopCollector(
+      PermissionsConfigSchema.parse({
+        enabled: true,
+        memories_enabled: true,
+      }),
+      "http://localhost:8787",
+      "dev-token",
+    );
+    emitOsTick(collector, { app: "Cursor", title: "shift-log" }, null);
+    emitOsTick(
+      collector,
+      { app: "Google Chrome", title: "github.com — Pull request", site: "github.com" },
+      { app: "Cursor", title: "shift-log" },
+    );
+    const window = collector.drainWindow(new Date());
+    expect(window.events.map((e) => e.type)).toEqual([
+      "app_switch",
+      "front_window_summary",
+      "app_switch",
+      "browser_navigation",
+    ]);
+    expect(window.events.some((e) => e.type === "typing_presence")).toBe(false);
   });
 });

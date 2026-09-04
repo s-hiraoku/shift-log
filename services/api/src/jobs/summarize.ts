@@ -1,6 +1,7 @@
 import type { InteractionEvent, MemoryRecord, WindowUpload } from "@shift-log/schema";
 import { serializeMemoryMarkdown } from "@shift-log/schema";
 import type { MemoryStore } from "../lib/store.js";
+import { summarizeWithLlm } from "./llm.js";
 
 function uniqueApps(events: InteractionEvent[]): string[] {
   return [...new Set(events.map((e) => e.app).filter((a): a is string => Boolean(a)))];
@@ -30,23 +31,19 @@ function detectSkillCandidate(events: InteractionEvent[]): {
   return { skill_candidate: false };
 }
 
-/**
- * Summarization job skeleton: turns a 10-minute window into Markdown memory.
- * Production would call an LLM; v1 uses a deterministic readable summary.
- */
-export function summarizeTenMinuteWindow(
-  store: MemoryStore,
-  upload: WindowUpload,
-): MemoryRecord {
+export function deterministicTenMinuteBody(upload: WindowUpload): {
+  title: string;
+  body: string;
+  apps: string[];
+  skill: ReturnType<typeof detectSkillCandidate>;
+} {
   const { metadata, events } = upload;
   const apps = uniqueApps(events);
   const skill = detectSkillCandidate(events);
-
   const byLane = {
     desk: events.filter((e) => e.device === "desk"),
     mobile: events.filter((e) => e.device === "mobile"),
   };
-
   const lines: string[] = [
     "## 作業サマリ",
     "",
@@ -54,12 +51,13 @@ export function summarizeTenMinuteWindow(
     `- イベント数: ${events.length}`,
     `- アプリ: ${apps.length ? apps.join(", ") : "(なし)"}`,
   ];
-
   if (metadata.dual_lane) {
     lines.push(
       "",
       "### desk レーン",
-      ...byLane.desk.slice(0, 8).map((e) => `- ${e.type}${e.app ? ` @ ${e.app}` : ""}${e.summary ? `: ${e.summary}` : ""}`),
+      ...byLane.desk
+        .slice(0, 8)
+        .map((e) => `- ${e.type}${e.app ? ` @ ${e.app}` : ""}${e.summary ? `: ${e.summary}` : ""}`),
       "",
       "### mobile レーン",
       ...byLane.mobile
@@ -72,19 +70,37 @@ export function summarizeTenMinuteWindow(
       "### イベント",
       ...events
         .slice(0, 12)
-        .map((e) => `- [${e.device}] ${e.type}${e.app ? ` @ ${e.app}` : ""}${e.summary ? `: ${e.summary}` : ""}`),
+        .map(
+          (e) =>
+            `- [${e.device}] ${e.type}${e.app ? ` @ ${e.app}` : ""}${e.summary ? `: ${e.summary}` : ""}`,
+        ),
     );
   }
-
   if (skill.skill_candidate) {
     lines.push("", `> skill_candidate: ${skill.skill_candidate_reason}`);
   }
-
-  const now = new Date().toISOString();
   const title =
     apps.length > 0
       ? `${apps.slice(0, 2).join(" / ")} — 10分サマリ`
       : "Activity — 10分サマリ";
+  return { title, body: lines.join("\n"), apps, skill };
+}
+
+/**
+ * Turns a 10-minute window into Markdown memory.
+ * Uses SHIFTLOG_LLM_* when configured; otherwise a deterministic template.
+ */
+export async function summarizeTenMinuteWindow(
+  store: MemoryStore,
+  upload: WindowUpload,
+): Promise<MemoryRecord> {
+  const { metadata, events } = upload;
+  const fallback = deterministicTenMinuteBody(upload);
+  const llm = await summarizeWithLlm(upload);
+  const title = llm?.title ?? fallback.title;
+  const body = llm?.body ?? fallback.body;
+  const { apps, skill } = fallback;
+  const now = new Date().toISOString();
 
   const record: MemoryRecord = {
     id: `mem_${metadata.window_id}`,
@@ -102,7 +118,7 @@ export function summarizeTenMinuteWindow(
       skill_candidate: skill.skill_candidate,
       skill_candidate_reason: skill.skill_candidate_reason,
     },
-    body: lines.join("\n"),
+    body,
   };
 
   store.putMemory(record);

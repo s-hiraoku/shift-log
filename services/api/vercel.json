@@ -2,5 +2,7 @@
   "name": "shift-log-api",
   "installCommand": "cd ../.. && pnpm install",
   "buildCommand": "cd ../.. && pnpm --filter @shift-log/schema build && pnpm --filter @shift-log/api build",
-  "outputDirectory": "dist"
+  "outputDirectory": "dist",
+  "rewrites": [{ "source": "/(.*)", "destination": "/api" }],
+  "crons": [{ "path": "/internal/cron/purge", "schedule": "0 * * * *" }]
 }

@@ -10,7 +10,12 @@
     "test": "vitest run",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "lint": "tsc -p tsconfig.json --noEmit",
-    "demo": "tsx src/collector.ts --demo"
+    "demo": "tsx src/collector.ts --demo",
+    "collect": "tsx src/collector.ts",
+    "menubar": "tsx src/collector.ts",
+    "menu": "tsx src/open-menu.ts",
+    "credentials": "tsx src/credentials-cli.ts",
+    "tray": "cargo run --manifest-path tray/Cargo.toml"
   },
   "dependencies": {
     "@shift-log/schema": "workspace:*"
