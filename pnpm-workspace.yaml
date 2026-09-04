@@ -2,3 +2,6 @@ packages:
   - "apps/*"
   - "services/*"
   - "packages/*"
+
+# Opt out of pnpm 11's 24h minimumReleaseAge so renovate-bumped lockfile entries install in CI.
+minimumReleaseAge: 0
