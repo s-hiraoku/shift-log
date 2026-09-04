@@ -4,5 +4,5 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-tray-icon = "0.19"
+tray-icon = "0.24"
 tao = "0.32"
