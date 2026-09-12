@@ -203,3 +203,43 @@ describe("MemoryStore persistence", () => {
     delete process.env.SHIFTLOG_DATA_DIR;
   });
 });
+
+describe("MemoryStore listMemories window range", () => {
+  it("selects a bucket before applying limit, so newer rows do not hide it", () => {
+    const store = new MemoryStore();
+    const put = (id: string, start: string) => {
+      store.putMemory({
+        id,
+        created_at: start,
+        updated_at: start,
+        front_matter: {
+          title: id,
+          description: id,
+          apps: ["Code"],
+          device: "desk",
+          window_start: start,
+          window_end: new Date(new Date(start).getTime() + 10 * 60_000).toISOString(),
+          kind: "ten_minute",
+          window_ids: [id],
+          skill_candidate: false,
+        },
+        body: id,
+      });
+    };
+    put("old-bucket", "2026-09-11T00:10:00.000Z");
+    put("new-1", "2026-09-12T12:10:00.000Z");
+    put("new-2", "2026-09-12T12:20:00.000Z");
+    put("new-3", "2026-09-12T12:30:00.000Z");
+
+    const newest = store.listMemories({ limit: 2, kind: "ten_minute" });
+    expect(newest.map((m) => m.id)).toEqual(["new-3", "new-2"]);
+
+    const bucket = store.listMemories({
+      limit: 2,
+      kind: "ten_minute",
+      windowStartGte: "2026-09-11T00:00:00.000Z",
+      windowStartLt: "2026-09-11T06:00:00.000Z",
+    });
+    expect(bucket.map((m) => m.id)).toEqual(["old-bucket"]);
+  });
+});
