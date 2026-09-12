@@ -94,4 +94,71 @@ describe("DesktopCollector", () => {
     ]);
     expect(window.events.some((e) => e.type === "typing_presence")).toBe(false);
   });
+
+  it("keeps buffered events when upload rejects", async () => {
+    const collector = new DesktopCollector(
+      PermissionsConfigSchema.parse({
+        enabled: true,
+        memories_enabled: true,
+      }),
+      "http://127.0.0.1:1",
+      "dev-token",
+    );
+    collector.observe({
+      id: "keep-me",
+      type: "app_switch",
+      ts: "2026-09-12T00:00:00.000Z",
+      app: "Code",
+    });
+    collector.upload = async () => {
+      throw new Error("ECONNREFUSED");
+    };
+
+    const first = await collector.flushWindow(new Date("2026-09-12T00:00:00.000Z"));
+    expect(first).toEqual({
+      uploaded: false,
+      retained: 1,
+      windowId: "desk_2026-09-12T00:00:00.000Z",
+    });
+    expect(collector.pendingEventCount()).toBe(1);
+    expect(collector.lastUploadError()).toBe("ECONNREFUSED");
+
+    const retry = collector.drainWindow(new Date("2026-09-12T00:00:00.000Z"));
+    expect(retry.events.map((e) => e.id)).toEqual(["keep-me"]);
+  });
+
+  it("keeps buffered events when upload returns HTTP 503", async () => {
+    const collector = new DesktopCollector(
+      PermissionsConfigSchema.parse({
+        enabled: true,
+        memories_enabled: true,
+      }),
+      "http://127.0.0.1:1",
+      "dev-token",
+    );
+    collector.observe({
+      id: "keep-503",
+      type: "front_window_summary",
+      ts: "2026-09-12T00:10:00.000Z",
+      app: "Chrome",
+    });
+    collector.upload = async () => new Response("api down", { status: 503 });
+
+    const first = await collector.flushWindow(new Date("2026-09-12T00:10:00.000Z"));
+    expect(first.uploaded).toBe(false);
+    expect(first.status).toBe(503);
+    expect(first.retained).toBe(1);
+    expect(collector.lastUploadError()).toBe("upload 503");
+
+    collector.upload = async () => new Response("ok", { status: 200 });
+    const second = await collector.flushWindow(new Date("2026-09-12T00:10:00.000Z"));
+    expect(second).toEqual({
+      uploaded: true,
+      status: 200,
+      retained: 0,
+      windowId: "desk_2026-09-12T00:10:00.000Z",
+    });
+    expect(collector.pendingEventCount()).toBe(0);
+    expect(collector.lastUploadError()).toBeUndefined();
+  });
 });
