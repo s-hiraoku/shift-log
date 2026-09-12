@@ -20,12 +20,21 @@ import { startControlServer, type ControlState } from "./control-server.js";
 export class DesktopCollector {
   private buffer: InteractionEvent[] = [];
   private pausedLocal = false;
+  private uploadError: string | undefined;
 
   constructor(
     private permissions: PermissionsConfig,
     private apiBase: string,
     private token: string,
   ) {}
+
+  pendingEventCount(): number {
+    return this.buffer.length;
+  }
+
+  lastUploadError(): string | undefined {
+    return this.uploadError;
+  }
 
   setPermissions(permissions: PermissionsConfig): void {
     this.permissions = permissions;
@@ -115,6 +124,50 @@ export class DesktopCollector {
       },
       body: JSON.stringify(window),
     });
+  }
+
+  private restoreEvents(events: InteractionEvent[]): void {
+    this.buffer.unshift(...events);
+  }
+
+  async flushWindow(windowStart: Date): Promise<{
+    uploaded: boolean;
+    status?: number;
+    retained: number;
+    windowId?: string;
+  }> {
+    const snapshot = this.drainWindow(windowStart);
+    if (snapshot.events.length === 0) {
+      return { uploaded: false, retained: 0 };
+    }
+    try {
+      const res = await this.upload(snapshot);
+      if (!res.ok) {
+        this.restoreEvents(snapshot.events);
+        this.uploadError = `upload ${res.status}`;
+        return {
+          uploaded: false,
+          status: res.status,
+          retained: this.buffer.length,
+          windowId: snapshot.metadata.window_id,
+        };
+      }
+      this.uploadError = undefined;
+      return {
+        uploaded: true,
+        status: res.status,
+        retained: 0,
+        windowId: snapshot.metadata.window_id,
+      };
+    } catch (err) {
+      this.restoreEvents(snapshot.events);
+      this.uploadError = err instanceof Error ? err.message : String(err);
+      return {
+        uploaded: false,
+        retained: this.buffer.length,
+        windowId: snapshot.metadata.window_id,
+      };
+    }
   }
 }
 
@@ -233,24 +286,35 @@ export async function main(): Promise<void> {
 
   async function flush(): Promise<void> {
     try {
-      permissions = await loadPermissions();
-      collector.setPermissions(permissions);
-    } catch (err) {
-      console.warn("[desktop] permissions refresh failed:", err);
-    }
-    if (!canCollect(permissions)) {
-      console.log("[desktop] collection disabled — enable ShiftLog + Memories in Settings");
-      return;
-    }
-    const upload = collector.drainWindow(windowStart);
-    windowStart = new Date();
-    if (upload.events.length === 0) {
+      try {
+        permissions = await loadPermissions();
+        collector.setPermissions(permissions);
+      } catch (err) {
+        console.warn("[desktop] permissions refresh failed:", err);
+      }
+      if (!canCollect(permissions)) {
+        console.log("[desktop] collection disabled — enable ShiftLog + Memories in Settings");
+        return;
+      }
+      const result = await collector.flushWindow(windowStart);
+      if (result.uploaded) {
+        windowStart = new Date();
+        console.log(
+          `[desktop] uploaded window ${result.windowId} status=${result.status}`,
+        );
+        return;
+      }
+      if (result.retained > 0) {
+        console.warn(
+          `[desktop] flush deferred retained=${result.retained} error=${collector.lastUploadError() ?? "unknown"}`,
+        );
+        return;
+      }
+      windowStart = new Date();
       console.log("[desktop] flush skipped (no events)");
-      return;
+    } catch (err) {
+      console.warn("[desktop] flush failed:", err);
     }
-    const res = await collector.upload(upload);
-    const body = await res.text();
-    console.log(`[desktop] uploaded window ${upload.metadata.window_id} status=${res.status} ${body}`);
   }
 
   async function tick(): Promise<void> {
