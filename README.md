@@ -52,6 +52,8 @@ pnpm dev:api          # http://localhost:8787 （data/ に永続化）
 pnpm dev:web          # http://localhost:3000
 ```
 
+`pnpm dev:api`, `pnpm dev:web`, and the desktop `dev` / `collect` / `demo` scripts read the repo-root `.env`. You do not need a symlink under `apps/web`. If `.env` is missing and `SHIFTLOG_API_TOKEN` is unset, the API still refuses to start (fail-closed).
+
 1. ブラウザで http://localhost:3000 を開き、「有効化してデモデータを投入」
 2. タイムラインで記憶を確認
 3. （任意）連続収集デモ: `pnpm demo:desktop`
