@@ -148,8 +148,12 @@ export function createApp() {
 
     const bucket = sixHourBucketUtc(upload.metadata.window_start);
     const tenInBucket = store
-      .listMemories({ limit: 200, kind: "ten_minute" })
-      .filter((m) => sixHourBucketUtc(m.front_matter.window_start).start === bucket.start)
+      .listMemories({
+        limit: 36,
+        kind: "ten_minute",
+        windowStartGte: bucket.start,
+        windowStartLt: bucket.end,
+      })
       .reverse();
     summarizeSixHourBundle(
       store,
