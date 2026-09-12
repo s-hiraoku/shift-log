@@ -14,20 +14,21 @@ stop_pid() {
     echo "cleanup: $name pid unset (skip)"
     return
   fi
-  if ! alive "$pid"; then
-    echo "cleanup: $name pid $pid already gone"
-    return
+  echo "cleanup: stopping $name pid $pid (process group)"
+  # launch.sh starts each service with setsid, so -$pid is the group.
+  if alive "$pid"; then
+    kill -- "-$pid" 2>/dev/null || kill "$pid" 2>/dev/null || true
+  else
+    kill -- "-$pid" 2>/dev/null || true
   fi
-  echo "cleanup: stopping $name pid $pid"
-  kill "$pid" 2>/dev/null || true
   local i
   for i in $(seq 1 25); do
     alive "$pid" || break
     sleep 0.2
   done
   if alive "$pid"; then
-    echo "cleanup: $name pid $pid still alive; sending SIGKILL"
-    kill -9 "$pid" 2>/dev/null || true
+    echo "cleanup: $name pid $pid still alive; sending SIGKILL to group"
+    kill -9 -- "-$pid" 2>/dev/null || kill -9 "$pid" 2>/dev/null || true
   fi
 }
 
@@ -35,6 +36,24 @@ stop_pid() {
 stop_pid chrome "${CHROME_PID:-}"
 stop_pid web "${WEB_PID:-}"
 stop_pid api "${API_PID:-}"
+
+# Revert Next dest side effects in the repo (not evidence).
+if [[ -n "${REPO_ROOT:-}" && -d "$REPO_ROOT/apps/web" ]]; then
+  if [[ -n "${NEXT_ENV_BACKUP:-}" && -f "$NEXT_ENV_BACKUP" ]]; then
+    cp "$NEXT_ENV_BACKUP" "$REPO_ROOT/apps/web/next-env.d.ts"
+    echo "cleanup: restored apps/web/next-env.d.ts"
+  fi
+  if [[ "${WEB_AGENTS_EXISTED:-1}" == "0" && -f "$REPO_ROOT/apps/web/AGENTS.md" ]]; then
+    if grep -q "BEGIN:nextjs-agent-rules" "$REPO_ROOT/apps/web/AGENTS.md"; then
+      rm -f "$REPO_ROOT/apps/web/AGENTS.md"
+      echo "cleanup: removed apps/web/AGENTS.md written by next dest"
+    fi
+  fi
+  if [[ "${WEB_CLAUDE_EXISTED:-1}" == "0" && -f "$REPO_ROOT/apps/web/CLAUDE.md" ]]; then
+    rm -f "$REPO_ROOT/apps/web/CLAUDE.md"
+    echo "cleanup: removed apps/web/CLAUDE.md written by next dest"
+  fi
+fi
 
 if [[ -n "${STATE_DIR:-}" && -d "$STATE_DIR" ]]; then
   echo "cleanup: removing scratch $STATE_DIR"

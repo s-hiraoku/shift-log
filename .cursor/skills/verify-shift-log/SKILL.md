@@ -38,6 +38,8 @@ Env the helper sets (do not inherit `DATABASE_URL`):
 
 Teardown is `helpers/cleanup.sh`. Two verification instances can run side by side if each has its own ports, data dir, and token. Do not point two webs at one API if either will mutate history.
 
+`next dest` (observed Next.js 16.3.4) rewrites `apps/web/next-env.d.ts` and may add `apps/web/AGENTS.md` / `apps/web/CLAUDE.md`. Launch snapshots those paths; cleanup restores them. Do not commit those files from a verification run.
+
 ## Doctor
 
 Run this first whenever anything looks off. It is read-only.

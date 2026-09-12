@@ -41,10 +41,6 @@ alive() {
 
 port_in_use() {
   local port="$1"
-  if command -v ss >/dev/null 2>&1; then
-    ss -ltn 2>/dev/null | awk '{print $4}' | grep -Eq ":${port}$"
-    return
-  fi
   python3 - "$port" <<'PY'
 import socket, sys
 port = int(sys.argv[1])
@@ -53,10 +49,10 @@ s.settimeout(0.2)
 try:
     s.connect(("127.0.0.1", port))
 except OSError:
-    sys.exit(1)
+    raise SystemExit(1)
 finally:
     s.close()
-sys.exit(0)
+raise SystemExit(0)
 PY
 }
 
