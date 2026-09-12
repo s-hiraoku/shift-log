@@ -25,7 +25,7 @@ WEB_ORIGIN="http://127.0.0.1:${WEB_PORT}"
 
 mkdir -p "$STATE_DIR/data" "$EVIDENCE_DIR" "$STATE_DIR/logs"
 
-# next dest (16.3) rewrites apps/web/next-env.d.ts and may add AGENTS.md / CLAUDE.md.
+# next dev (16.3) rewrites apps/web/next-env.d.ts and may add AGENTS.md / CLAUDE.md.
 # Snapshot so cleanup can restore the repo tree. Do not commit those files.
 NEXT_ENV_FILE="$REPO_ROOT/apps/web/next-env.d.ts"
 WEB_AGENTS_EXISTED=0
@@ -53,7 +53,7 @@ setsid env -u DATABASE_URL -u VITEST \
   SHIFTLOG_DATA_DIR="$SHIFTLOG_DATA_DIR" \
   SHIFTLOG_RATE_LIMIT_PER_MIN="$SHIFTLOG_RATE_LIMIT_PER_MIN" \
   SHIFTLOG_CORS_ORIGINS="$SHIFTLOG_CORS_ORIGINS" \
-  pnpm --filter @shift-log/api dest \
+  pnpm --filter @shift-log/api dev \
   >"$STATE_DIR/logs/api.log" 2>&1 &
 API_PID=$!
 
@@ -62,7 +62,7 @@ setsid env \
   NEXT_TELEMETRY_DISABLED=1 \
   SHIFTLOG_API_ORIGIN="$SHIFTLOG_API_ORIGIN" \
   SHIFTLOG_API_TOKEN="$TOKEN" \
-  pnpm --filter @shift-log/web exec next dest --port "$WEB_PORT" --hostname 127.0.0.1 \
+  pnpm --filter @shift-log/web exec next dev --port "$WEB_PORT" --hostname 127.0.0.1 \
   >"$STATE_DIR/logs/web.log" 2>&1 &
 WEB_PID=$!
 

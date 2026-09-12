@@ -40,4 +40,4 @@ Preconditions:
 - Demo window ids embed timestamps. Re-seeding creates additional memories; assert “at least these titles”, not an exact count of 3, unless the instance was empty.
 - Titles come from the deterministic summarizer (`Code / Chrome — 10分サマリ`). If `SHIFTLOG_LLM_API_KEY` is set on the API process, titles may differ — this verification launch unsets that path by not exporting the key.
 - `pnpm seed` / curl is a documented CLI path. It is not a substitute for the home-button entry when the feature under test is the button.
-- `next dest` may write `apps/web/AGENTS.md`. Cleanup restores the tree; do not treat that file as product output.
+- `next dev` may write `apps/web/AGENTS.md`. Cleanup restores the tree; do not treat that file as product output.

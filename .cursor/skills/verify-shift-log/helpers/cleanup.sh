@@ -46,12 +46,12 @@ if [[ -n "${REPO_ROOT:-}" && -d "$REPO_ROOT/apps/web" ]]; then
   if [[ "${WEB_AGENTS_EXISTED:-1}" == "0" && -f "$REPO_ROOT/apps/web/AGENTS.md" ]]; then
     if grep -q "BEGIN:nextjs-agent-rules" "$REPO_ROOT/apps/web/AGENTS.md"; then
       rm -f "$REPO_ROOT/apps/web/AGENTS.md"
-      echo "cleanup: removed apps/web/AGENTS.md written by next dest"
+      echo "cleanup: removed apps/web/AGENTS.md written by next dev"
     fi
   fi
   if [[ "${WEB_CLAUDE_EXISTED:-1}" == "0" && -f "$REPO_ROOT/apps/web/CLAUDE.md" ]]; then
     rm -f "$REPO_ROOT/apps/web/CLAUDE.md"
-    echo "cleanup: removed apps/web/CLAUDE.md written by next dest"
+    echo "cleanup: removed apps/web/CLAUDE.md written by next dev"
   fi
 fi
 

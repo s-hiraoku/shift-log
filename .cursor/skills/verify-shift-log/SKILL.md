@@ -38,7 +38,7 @@ Env the helper sets (do not inherit `DATABASE_URL`):
 
 Teardown is `helpers/cleanup.sh`. Two verification instances can run side by side if each has its own ports, data dir, and token. Do not point two webs at one API if either will mutate history.
 
-`next dest` (observed Next.js 16.3.4) rewrites `apps/web/next-env.d.ts` and may add `apps/web/AGENTS.md` / `apps/web/CLAUDE.md`. Launch snapshots those paths; cleanup restores them. Do not commit those files from a verification run.
+`next dev` (observed Next.js 16.3.4) rewrites `apps/web/next-env.d.ts` and may add `apps/web/AGENTS.md` / `apps/web/CLAUDE.md`. Launch snapshots those paths; cleanup restores them. Do not commit those files from a verification run.
 
 ## Doctor
 
@@ -129,7 +129,7 @@ Proof standards:
 .cursor/skills/verify-shift-log/helpers/cleanup.sh
 ```
 
-Stops only `CHROME_PID`, `WEB_PID`, and `API_PID` from the state file (SIGTERM, then SIGKILL). Removes `$STATE_DIR` (logs, SQLite, Chrome profile). Leaves `$EVIDENCE_DIR`. After cleanup, confirm the evidence files still exist.
+Stops only the process groups for `CHROME_PID`, `WEB_PID`, and `API_PID` from the state file (SIGTERM, then SIGKILL). Launch starts API/web with `setsid` so children (`tsx watch`, `next dev`) die with the recorded PID. Removes `$STATE_DIR` (logs, SQLite, Chrome profile) and restores `apps/web/next-env.d.ts` plus any Next-generated `AGENTS.md` / `CLAUDE.md`. Leaves `$EVIDENCE_DIR`. After cleanup, confirm the evidence files still exist.
 
 Do not `pkill -f next` / `pkill -f tsx` / kill-by-name.
 
