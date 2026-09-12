@@ -45,12 +45,20 @@ Cursor などではリポジトリの Skill を有効化するか、`skills/shif
 ## MVP クイックスタート
 
 ```bash
+corepack enable
 cp .env.example .env
 pnpm install
 pnpm --filter @shift-log/schema build
 pnpm dev:api          # http://localhost:8787 （data/ に永続化）
 pnpm dev:web          # http://localhost:3000
 ```
+
+Use the `packageManager` field in `package.json`. pnpm 9 installs without optional native bindings, then `pnpm test` fails. `corepack enable` makes `pnpm` honor that field. If corepack is unavailable:
+
+```bash
+npm exec --package="$(node -p "require('./package.json').packageManager")" -- pnpm install
+```
+
 
 `pnpm dev:api`, `pnpm dev:web`, and the desktop `dev` / `collect` / `demo` scripts read the repo-root `.env`. You do not need a symlink under `apps/web`. If `.env` is missing and `SHIFTLOG_API_TOKEN` is unset, the API still refuses to start (fail-closed).
 
@@ -80,6 +88,7 @@ pnpm dev:web          # http://localhost:3000
 ## セットアップ
 
 ```bash
+corepack enable
 pnpm install
 pnpm --filter @shift-log/schema build
 pnpm --filter @shift-log/api dev          # http://localhost:8787

@@ -16,6 +16,7 @@
     "seed": "curl -s -X POST -H \"Authorization: Bearer ${SHIFTLOG_API_TOKEN:-dev-token}\" -H \"Content-Type: application/json\" -d '{\"enable\":true}' \"${SHIFTLOG_API_ORIGIN:-http://localhost:8787}/v1/demo/seed\""
   },
   "engines": {
-    "node": ">=20"
+    "node": ">=20",
+    "pnpm": ">=12.3.4"
   }
 }
