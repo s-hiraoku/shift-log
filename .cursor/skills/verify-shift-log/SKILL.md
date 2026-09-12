@@ -119,7 +119,7 @@ Proof standards:
 - Capture the action and the resulting state (before + after), not only the final screen.
 - Verify side effects: `GET /v1/timeline`, `GET /v1/permissions`, or reopen the screen. For search, a matching title must appear and a miss must not.
 - Record `feature` id and entry point on every artifact (`proof.json` in the feature evidence folder).
-- UI proof: page text snapshot **and** a screenshot that shows the `ShiftLog` brand in the top bar.
+- UI proof: page text snapshot **and** a screenshot that shows the `ShiftLog` brand in the top bar. Treat the text snapshot as authoritative for Japanese labels; headless Chrome may substitute fallback glyphs.
 - API proof: request URL, status, and body (json file).
 - Demo titles (deterministic template, no `SHIFTLOG_LLM_API_KEY`): `Code / Chrome — 10分サマリ`, `Terminal / Slack — 10分サマリ`, `Safari — 10分サマリ`. Window ids include timestamps, so a second seed adds more rows rather than replacing them.
 
