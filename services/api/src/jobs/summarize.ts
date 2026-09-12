@@ -22,7 +22,6 @@ function detectSkillCandidate(events: InteractionEvent[]): {
 } {
   const apps = uniqueApps(events);
   const switches = events.filter((e) => e.type === "app_switch").length;
-  // Heuristic only — SkillCheck will own real detection later.
   if (switches >= 4 && apps.length <= 2) {
     return {
       skill_candidate: true,
@@ -55,10 +54,6 @@ export function deterministicTenMinuteBody(upload: WindowUpload): {
   };
 }
 
-/**
- * Turns a 10-minute window into Markdown memory.
- * Uses SHIFTLOG_LLM_* when configured; otherwise a deterministic template.
- */
 export async function summarizeTenMinuteWindow(
   store: MemoryStore,
   upload: WindowUpload,

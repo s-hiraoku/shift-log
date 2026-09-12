@@ -40,11 +40,6 @@ function lastSite(events: InteractionEvent[]): string | undefined {
   return sites[sites.length - 1];
 }
 
-/**
- * Collapse a 10-minute window into per-app dwell and consecutive focus spans.
- * Same app in a row (ghostty ping-pong titles, app_switch + front_window_summary)
- * is one span. A switch away and back is a new span.
- */
 export function aggregateTenMinuteWindow(upload: WindowUpload): TenMinuteAggregate {
   const { metadata, events } = upload;
   const focused = [...events]
