@@ -116,10 +116,13 @@ export class MemoryStore {
     return stored;
   }
 
-  listMemories(opts: { q?: string; limit: number }): MemoryRecord[] {
+  listMemories(opts: { q?: string; limit: number; kind?: "ten_minute" | "six_hour" }): MemoryRecord[] {
     let items = [...this.memories.values()].sort((a, b) =>
       b.front_matter.window_start.localeCompare(a.front_matter.window_start),
     );
+    if (opts.kind) {
+      items = items.filter((m) => m.front_matter.kind === opts.kind);
+    }
     if (opts.q) {
       const q = opts.q.toLowerCase();
       items = items.filter((m) => {

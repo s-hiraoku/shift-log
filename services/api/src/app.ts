@@ -13,7 +13,11 @@ import { rateLimit } from "./middleware/rate-limit.js";
 import { audit } from "./lib/audit.js";
 import { sanitizeWindowUpload } from "./lib/sanitize.js";
 import { isRawWindowExpired, purgeAllTenants, storeFor, type MemoryStore } from "./lib/store.js";
-import { summarizeSixHourBundle, summarizeTenMinuteWindow } from "./jobs/summarize.js";
+import {
+  sixHourBucketUtc,
+  summarizeSixHourBundle,
+  summarizeTenMinuteWindow,
+} from "./jobs/summarize.js";
 import { seedDemoData } from "./lib/demo.js";
 
 const MAX_UPLOAD_BYTES = Number(process.env.SHIFTLOG_MAX_UPLOAD_BYTES ?? 512_000);
@@ -142,15 +146,16 @@ export function createApp() {
     store.putWindow(upload);
     await summarizeTenMinuteWindow(store, upload);
 
-    const recentTen = store
-      .listMemories({ limit: 36 })
-      .filter((m) => m.front_matter.kind === "ten_minute");
-    if (recentTen.length >= 36 || recentTen.length % 6 === 0) {
-      summarizeSixHourBundle(
-        store,
-        recentTen.map((m) => m.id).reverse(),
-      );
-    }
+    const bucket = sixHourBucketUtc(upload.metadata.window_start);
+    const tenInBucket = store
+      .listMemories({ limit: 200, kind: "ten_minute" })
+      .filter((m) => sixHourBucketUtc(m.front_matter.window_start).start === bucket.start)
+      .reverse();
+    summarizeSixHourBundle(
+      store,
+      tenInBucket.map((m) => m.id),
+      bucket,
+    );
 
     return c.json({
       window_id: upload.metadata.window_id,
@@ -164,6 +169,7 @@ export function createApp() {
       q: c.req.query("q"),
       limit: c.req.query("limit") ?? "50",
       cursor: c.req.query("cursor"),
+      kind: c.req.query("kind") || undefined,
     });
     return c.json({ items: tenant(c).listMemories(query), next_cursor: null });
   });
@@ -178,6 +184,7 @@ export function createApp() {
     const query = TimelineQuerySchema.parse({
       q: c.req.query("q") ?? "",
       limit: c.req.query("limit") ?? "50",
+      kind: c.req.query("kind") || undefined,
     });
     return c.json({ items: tenant(c).listMemories(query) });
   });

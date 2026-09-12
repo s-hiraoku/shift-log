@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { createApp } from "./app.js";
 import { store } from "./lib/store.js";
 import { resetRateLimitBuckets } from "./middleware/rate-limit.js";
+import { sixHourBucketUtc } from "./jobs/summarize.js";
 
 const token = "dev-token";
 
@@ -325,5 +326,104 @@ describe("ShiftLog API", () => {
     });
     expect(ok.status).toBe(200);
     expect((await ok.json()).ok).toBe(true);
+  });
+
+  it("writes one six-hour memory per UTC bucket and overwrites that id", async () => {
+    process.env.SHIFTLOG_RATE_LIMIT_PER_MIN = "200";
+    resetRateLimitBuckets();
+    store.permissions = {
+      ...store.permissions,
+      enabled: true,
+      memories_enabled: true,
+    };
+
+    async function postWindow(windowId: string, startIso: string) {
+      const start = new Date(startIso);
+      const end = new Date(start.getTime() + 10 * 60_000);
+      const res = await app.request("/v1/windows", {
+        method: "POST",
+        headers: authHeaders(),
+        body: JSON.stringify({
+          metadata: {
+            window_id: windowId,
+            window_start: start.toISOString(),
+            window_end: end.toISOString(),
+            devices: ["desk"],
+            dual_lane: false,
+            event_count: 1,
+            schema_version: "1",
+          },
+          events: [
+            {
+              id: `${windowId}-e`,
+              type: "app_switch",
+              ts: start.toISOString(),
+              device: "desk",
+              app: "Code",
+            },
+          ],
+        }),
+      });
+      expect(res.status).toBe(200);
+    }
+
+    const current = sixHourBucketUtc(new Date().toISOString());
+    const bucketMs = 6 * 60 * 60 * 1000;
+    const starts = [0, 1, 2, 3].map((i) =>
+      new Date(new Date(current.start).getTime() - i * bucketMs + 10 * 60_000).toISOString(),
+    );
+
+    for (let i = 0; i < 7; i++) {
+      const start = new Date(new Date(current.start).getTime() + (10 + i * 10) * 60_000);
+      await postWindow(`w-new-${i}`, start.toISOString());
+    }
+    await postWindow("w-b1", starts[1]!);
+    await postWindow("w-b2", starts[2]!);
+    await postWindow("w-b3", starts[3]!);
+
+    const sixHour = [...store.memories.values()].filter(
+      (m) => m.front_matter.kind === "six_hour",
+    );
+    expect(sixHour).toHaveLength(4);
+
+    const newestId = sixHour.find((m) =>
+      m.front_matter.window_ids.includes("w-new-0"),
+    )?.id;
+    expect(newestId).toMatch(/^mem_6h_/);
+    const newestRecord = store.getMemory(newestId!);
+    expect(newestRecord?.front_matter.window_ids).toHaveLength(7);
+    expect(
+      sixHour.filter((m) => m.id === newestId),
+    ).toHaveLength(1);
+
+    const created = newestRecord!.created_at;
+    await postWindow(
+      "w-new-extra",
+      new Date(new Date(current.start).getTime() + 90 * 60_000).toISOString(),
+    );
+    const after = store.getMemory(newestId!);
+    expect(after?.created_at).toBe(created);
+    expect(after?.front_matter.window_ids).toHaveLength(8);
+    expect(
+      [...store.memories.values()].filter((m) => m.front_matter.kind === "six_hour"),
+    ).toHaveLength(4);
+
+    const filtered = await app.request("/v1/timeline?kind=six_hour&limit=20", {
+      headers: authHeaders(),
+    });
+    const filteredBody = await filtered.json();
+    expect(filteredBody.items).toHaveLength(4);
+    expect(
+      filteredBody.items.every((m: { front_matter: { kind: string } }) => m.front_matter.kind === "six_hour"),
+    ).toBe(true);
+
+    const tens = await app.request("/v1/timeline?kind=ten_minute&limit=20", {
+      headers: authHeaders(),
+    });
+    const tensBody = await tens.json();
+    expect(
+      tensBody.items.every((m: { front_matter: { kind: string } }) => m.front_matter.kind === "ten_minute"),
+    ).toBe(true);
+    expect(tensBody.items.length).toBeGreaterThan(0);
   });
 });

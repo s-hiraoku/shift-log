@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { MemoryRecordSchema } from "./memory.js";
+import { MemoryKindSchema, MemoryRecordSchema } from "./memory.js";
 import { WindowUploadSchema } from "./window.js";
 
 export const DeleteScopeSchema = z.enum([
@@ -26,6 +26,7 @@ export const TimelineQuerySchema = z.object({
   q: z.string().optional(),
   limit: z.coerce.number().int().positive().max(100).default(50),
   cursor: z.string().optional(),
+  kind: MemoryKindSchema.optional(),
 });
 
 export const ContinueContextRequestSchema = z.object({
