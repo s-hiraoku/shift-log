@@ -1,6 +1,12 @@
 import { describe, expect, it } from "vitest";
 import type { WindowUpload } from "@shift-log/schema";
-import { isRawWindowExpired, MemoryStore } from "./store.js";
+import {
+  isRawWindowExpired,
+  isTenMinuteMemoryExpired,
+  MemoryStore,
+  purgeAllTenants,
+  storeFor,
+} from "./store.js";
 
 function baseUpload(
   overrides: Partial<WindowUpload["metadata"]> & { window_id: string },
@@ -93,6 +99,103 @@ describe("MemoryStore retention", () => {
         new Date("2026-08-30T01:00:00.000Z"),
       ),
     ).toBe(false);
+  });
+
+  it("sweeps ten-minute memories older than 14 days and keeps six-hour rows", () => {
+    const store = new MemoryStore();
+    const now = new Date("2026-09-15T00:00:00.000Z");
+    store.putMemory({
+      id: "old-10m",
+      created_at: "2026-08-20T01:10:00.000Z",
+      updated_at: "2026-08-20T01:10:00.000Z",
+      front_matter: {
+        title: "old ten",
+        description: "should go",
+        apps: ["ghostty"],
+        device: "desk",
+        window_start: "2026-08-20T01:00:00.000Z",
+        window_end: "2026-08-20T01:10:00.000Z",
+        kind: "ten_minute",
+        window_ids: ["w-old"],
+        skill_candidate: false,
+      },
+      body: "drop",
+    });
+    store.putMemory({
+      id: "fresh-10m",
+      created_at: "2026-09-14T12:10:00.000Z",
+      updated_at: "2026-09-14T12:10:00.000Z",
+      front_matter: {
+        title: "fresh ten",
+        description: "keep",
+        apps: ["Code"],
+        device: "desk",
+        window_start: "2026-09-14T12:00:00.000Z",
+        window_end: "2026-09-14T12:10:00.000Z",
+        kind: "ten_minute",
+        window_ids: ["w-fresh"],
+        skill_candidate: false,
+      },
+      body: "keep",
+    });
+    store.putMemory({
+      id: "old-6h",
+      created_at: "2026-08-20T06:00:00.000Z",
+      updated_at: "2026-08-20T06:00:00.000Z",
+      front_matter: {
+        title: "old six",
+        description: "keep",
+        apps: ["ghostty"],
+        device: "desk",
+        window_start: "2026-08-20T00:00:00.000Z",
+        window_end: "2026-08-20T06:00:00.000Z",
+        kind: "six_hour",
+        window_ids: ["w-old"],
+        skill_candidate: false,
+      },
+      body: "keep",
+    });
+
+    expect(
+      isTenMinuteMemoryExpired(store.getMemory("old-10m")!, now),
+    ).toBe(true);
+    expect(
+      isTenMinuteMemoryExpired(store.getMemory("old-6h")!, now),
+    ).toBe(false);
+
+    const removed = store.purgeExpiredTenMinuteMemories(now);
+    expect(removed).toBe(1);
+    expect(store.memories.has("old-10m")).toBe(false);
+    expect(store.memories.has("fresh-10m")).toBe(true);
+    expect(store.memories.has("old-6h")).toBe(true);
+  });
+
+  it("honors SHIFTLOG_TEN_MINUTE_RETENTION_DAYS on the hourly sweep", () => {
+    const previous = process.env.SHIFTLOG_TEN_MINUTE_RETENTION_DAYS;
+    process.env.SHIFTLOG_TEN_MINUTE_RETENTION_DAYS = "1";
+    const store = storeFor("retention-1d");
+    store.putMemory({
+      id: "two-days-old",
+      created_at: "2026-09-13T00:10:00.000Z",
+      updated_at: "2026-09-13T00:10:00.000Z",
+      front_matter: {
+        title: "two days",
+        description: "gone at 1 day retention",
+        apps: [],
+        device: "desk",
+        window_start: "2026-09-13T00:00:00.000Z",
+        window_end: "2026-09-13T00:10:00.000Z",
+        kind: "ten_minute",
+        window_ids: ["w-2d"],
+        skill_candidate: false,
+      },
+      body: "drop",
+    });
+    const removed = purgeAllTenants(new Date("2026-09-15T00:00:00.000Z"));
+    expect(removed).toBeGreaterThanOrEqual(1);
+    expect(store.memories.has("two-days-old")).toBe(false);
+    if (previous === undefined) delete process.env.SHIFTLOG_TEN_MINUTE_RETENTION_DAYS;
+    else process.env.SHIFTLOG_TEN_MINUTE_RETENTION_DAYS = previous;
   });
 });
 

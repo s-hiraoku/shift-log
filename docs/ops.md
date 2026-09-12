@@ -44,13 +44,16 @@ pnpm --filter @shift-log/desktop collect
 | `SHIFTLOG_LLM_API_KEY` | 任意 | あるとき十分サマリを LLM 化 |
 | `SHIFTLOG_LLM_BASE_URL` | 任意 | 既定 `https://api.openai.com/v1` |
 | `SHIFTLOG_LLM_MODEL` | 任意 | 既定 `gpt-4o-mini` |
+| `SHIFTLOG_TEN_MINUTE_RETENTION_DAYS` | 任意 | 十分記憶の保持日数。既定 14。六時間記憶は残る |
 | `SHIFTLOG_CONTROL_PORT` | 任意 | コレクタメニュー。既定 8791 |
 
 `NEXT_PUBLIC_*` にトークンを置かない。
 
 ## 保持と監査
 
-- 生イベントは **キャプチャ時刻（window_end）から 48 時間** で破棄。Markdown 記憶は残る
+- 生イベントは **キャプチャ時刻（window_end）から 48 時間** で破棄
+- 十分記憶は `window_end` から N 日（既定 14）で破棄。六時間記憶は残る
+- persist はスナップショット書き込みサイズを `[persist] snapshot user=… bytes=…` に出す
 - 自前ホストは起動時 + 1 時間ごとに purge
 - Vercel は毎時 `GET /internal/cron/purge`（`Authorization: Bearer $CRON_SECRET`）
 - 監査は stdout の 1 行 JSON（トークンと生イベントは出さない）

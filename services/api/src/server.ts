@@ -20,12 +20,14 @@ if (process.env.DATABASE_URL) {
 
 const removed = purgeAllTenants();
 if (removed > 0) {
-  console.log(`[retention] purged ${removed} raw window(s) older than 48h`);
+  console.log(`[retention] purged ${removed} expired raw window(s) or ten-minute memor(ies)`);
 }
 const sweepMs = Number(process.env.SHIFTLOG_RETENTION_SWEEP_MS ?? 60 * 60 * 1000);
 setInterval(() => {
   const n = purgeAllTenants();
-  if (n > 0) console.log(`[retention] purged ${n} raw window(s) older than 48h`);
+  if (n > 0) {
+    console.log(`[retention] purged ${n} expired raw window(s) or ten-minute memor(ies)`);
+  }
 }, sweepMs).unref();
 
 const port = Number(process.env.PORT ?? 8787);
