@@ -4,6 +4,29 @@ import { DeviceLaneSchema } from "./events.js";
 export const MemoryKindSchema = z.enum(["ten_minute", "six_hour"]);
 export type MemoryKind = z.infer<typeof MemoryKindSchema>;
 
+export const MemoryEntityKindSchema = z.enum([
+  "github_repo",
+  "github_pr",
+  "slack_channel",
+  "url",
+  "file",
+]);
+export type MemoryEntityKind = z.infer<typeof MemoryEntityKindSchema>;
+
+export const MemoryEntitySchema = z.object({
+  kind: MemoryEntityKindSchema,
+  value: z.string().min(1),
+});
+export type MemoryEntity = z.infer<typeof MemoryEntitySchema>;
+
+export const LlmMemorySchema = z.object({
+  title: z.string().min(1).max(120),
+  summary: z.string().min(1),
+  unfinished: z.string(),
+  entities: z.array(MemoryEntitySchema).default([]),
+});
+export type LlmMemory = z.infer<typeof LlmMemorySchema>;
+
 export const MemoryFrontMatterSchema = z.object({
   title: z.string().min(1),
   description: z.string(),
@@ -18,6 +41,7 @@ export const MemoryFrontMatterSchema = z.object({
   apps_dwell: z.record(z.string(), z.number().int().nonnegative()).optional(),
   sites: z.array(z.string()).optional(),
   top_app: z.string().optional(),
+  entities: z.array(MemoryEntitySchema).optional(),
 });
 export type MemoryFrontMatter = z.infer<typeof MemoryFrontMatterSchema>;
 
@@ -51,6 +75,9 @@ export function serializeMemoryMarkdown(record: MemoryRecord): string {
       : []),
     ...(fm.sites ? [`sites: [${fm.sites.map((s) => JSON.stringify(s)).join(", ")}]`] : []),
     ...(fm.top_app ? [`top_app: ${JSON.stringify(fm.top_app)}`] : []),
+    ...(fm.entities && fm.entities.length > 0
+      ? [`entities: ${JSON.stringify(fm.entities)}`]
+      : []),
     "---",
     "",
     record.body.trim(),
