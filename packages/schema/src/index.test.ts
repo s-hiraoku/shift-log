@@ -103,6 +103,7 @@ describe("memory markdown", () => {
         apps_dwell: { Code: 420, Terminal: 180 },
         sites: ["github.com"],
         top_app: "Code",
+        entities: [{ kind: "github_repo", value: "s-hiraoku/shift-log" }],
       },
       body: "## アプリ別滞在時間\n\n- 01:00 Code 420秒",
     };
@@ -112,5 +113,7 @@ describe("memory markdown", () => {
     expect(md).toContain("apps_dwell:");
     expect(md).toContain("top_app: \"Code\"");
     expect(md).toContain("アプリ別滞在時間");
+    expect(md).toContain("entities:");
+    expect(md).toContain("s-hiraoku/shift-log");
   });
 });

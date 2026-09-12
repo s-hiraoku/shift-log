@@ -1,7 +1,8 @@
 import type { InteractionEvent, MemoryRecord, WindowUpload } from "@shift-log/schema";
 import { serializeMemoryMarkdown } from "@shift-log/schema";
 import type { MemoryStore } from "../lib/store.js";
-import { summarizeWithLlm } from "./llm.js";
+import { extractEntities, mergeEntities } from "./entities.js";
+import { renderLlmBody, summarizeWithLlm } from "./llm.js";
 import { aggregateTenMinuteWindow, renderTenMinuteBody } from "./ten-minute.js";
 
 function uniqueApps(events: InteractionEvent[]): string[] {
@@ -60,10 +61,21 @@ export async function summarizeTenMinuteWindow(
 ): Promise<MemoryRecord> {
   const { metadata, events } = upload;
   const fallback = deterministicTenMinuteBody(upload);
-  const llm = await summarizeWithLlm(upload);
+  const previous = store.listMemories({
+    kind: "ten_minute",
+    windowStartLt: metadata.window_start,
+    limit: 1,
+  })[0];
+  const llm = await summarizeWithLlm(upload, fetch, {
+    aggregate: fallback.aggregate,
+    previous: previous
+      ? { title: previous.front_matter.title, body: previous.body }
+      : undefined,
+  });
   const title = llm?.title ?? fallback.title;
-  const body = llm?.body ?? fallback.body;
+  const body = llm ? renderLlmBody(llm, fallback.body) : fallback.body;
   const { apps, skill, aggregate } = fallback;
+  const entities = mergeEntities(extractEntities(upload, aggregate), llm?.entities ?? []);
   const now = new Date().toISOString();
 
   const record: MemoryRecord = {
@@ -72,7 +84,7 @@ export async function summarizeTenMinuteWindow(
     updated_at: now,
     front_matter: {
       title,
-      description: `${events.length} events across ${apps.length || 0} apps`,
+      description: llm?.summary ?? `${events.length} events across ${apps.length || 0} apps`,
       apps,
       device: deviceLabel(metadata.devices),
       window_start: metadata.window_start,
@@ -84,6 +96,7 @@ export async function summarizeTenMinuteWindow(
       apps_dwell: aggregate.apps_dwell,
       sites: aggregate.sites,
       top_app: aggregate.top_app,
+      entities,
     },
     body,
   };
