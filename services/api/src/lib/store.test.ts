@@ -345,4 +345,64 @@ describe("MemoryStore listMemories window range", () => {
     });
     expect(bucket.map((m) => m.id)).toEqual(["old-bucket"]);
   });
+
+  it("matches entity values and keeps window_start inside since/until", () => {
+    const store = new MemoryStore();
+    store.putMemory({
+      id: "pony",
+      created_at: "2026-09-10T08:10:00.000Z",
+      updated_at: "2026-09-10T08:10:00.000Z",
+      front_matter: {
+        title: "Ghostty / Slack",
+        description: "PR review",
+        apps: ["ghostty", "Slack"],
+        device: "desk",
+        window_start: "2026-09-10T08:00:00.000Z",
+        window_end: "2026-09-10T08:10:00.000Z",
+        kind: "ten_minute",
+        window_ids: ["pony"],
+        skill_candidate: false,
+        entities: [{ kind: "github_repo", value: "DietrichGebert/ponytail" }],
+      },
+      body: "reviewed a PR",
+    });
+    store.putMemory({
+      id: "recent",
+      created_at: "2026-09-12T12:10:00.000Z",
+      updated_at: "2026-09-12T12:10:00.000Z",
+      front_matter: {
+        title: "Code",
+        description: "editor",
+        apps: ["Code"],
+        device: "desk",
+        window_start: "2026-09-12T12:00:00.000Z",
+        window_end: "2026-09-12T12:10:00.000Z",
+        kind: "ten_minute",
+        window_ids: ["recent"],
+        skill_candidate: false,
+      },
+      body: "unrelated",
+    });
+
+    expect(store.listMemories({ q: "ponytail", limit: 10 }).map((m) => m.id)).toEqual(["pony"]);
+    expect(
+      store
+        .listMemories({
+          q: "ponytail",
+          limit: 10,
+          since: "2026-09-12T00:00:00.000Z",
+          until: "2026-09-12T23:59:59.000Z",
+        })
+        .map((m) => m.id),
+    ).toEqual([]);
+    expect(
+      store
+        .listMemories({
+          limit: 10,
+          since: "2026-09-12T00:00:00.000Z",
+          until: "2026-09-12T23:59:59.000Z",
+        })
+        .map((m) => m.id),
+    ).toEqual(["recent"]);
+  });
 });

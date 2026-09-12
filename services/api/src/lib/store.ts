@@ -16,6 +16,19 @@ import {
   type TenantSnapshot,
 } from "./persist.js";
 
+function memoryMatchesQuery(memory: MemoryRecord, q: string): boolean {
+  const hay = [
+    memory.front_matter.title,
+    memory.front_matter.description,
+    memory.body,
+    ...memory.front_matter.apps,
+    ...(memory.front_matter.entities ?? []).map((entity) => entity.value),
+  ]
+    .join(" ")
+    .toLowerCase();
+  return hay.includes(q);
+}
+
 export type StoredWindow = {
   metadata: WindowMetadata;
   events: InteractionEvent[];
@@ -141,6 +154,8 @@ export class MemoryStore {
     kind?: "ten_minute" | "six_hour";
     windowStartGte?: string;
     windowStartLt?: string;
+    since?: string;
+    until?: string;
   }): MemoryRecord[] {
     let items = [...this.memories.values()].sort((a, b) =>
       b.front_matter.window_start.localeCompare(a.front_matter.window_start),
@@ -154,19 +169,17 @@ export class MemoryStore {
     if (opts.windowStartLt) {
       items = items.filter((m) => m.front_matter.window_start < opts.windowStartLt!);
     }
+    if (opts.since) {
+      const sinceMs = new Date(opts.since).getTime();
+      items = items.filter((m) => new Date(m.front_matter.window_start).getTime() >= sinceMs);
+    }
+    if (opts.until) {
+      const untilMs = new Date(opts.until).getTime();
+      items = items.filter((m) => new Date(m.front_matter.window_start).getTime() <= untilMs);
+    }
     if (opts.q) {
       const q = opts.q.toLowerCase();
-      items = items.filter((m) => {
-        const hay = [
-          m.front_matter.title,
-          m.front_matter.description,
-          m.body,
-          ...m.front_matter.apps,
-        ]
-          .join(" ")
-          .toLowerCase();
-        return hay.includes(q);
-      });
+      items = items.filter((m) => memoryMatchesQuery(m, q));
     }
     return items.slice(0, opts.limit);
   }
