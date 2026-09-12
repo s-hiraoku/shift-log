@@ -63,6 +63,5 @@ const res = await fetch(`${origin}/v1/agent/continue`, {
 });
 const data = await res.json();
 // data.mode === "context_only"
-// data.memories[i].matched_by === "recent" | "keyword"
 // use data.memories as working memory; do not control the OS
 ```

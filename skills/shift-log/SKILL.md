@@ -67,7 +67,7 @@ curl -sS "$SHIFTLOG_API_ORIGIN/v1/agent/recent?limit=12" \
 | `note` | Reminder: read-only; no Computer Use |
 | `prompt` | Echo of continue prompt (continue endpoint only) |
 
-Continue extracts keywords from `prompt`, runs `listMemories({ q })` for each, and merges those hits with the newest `limit` rows. Keyword hits come first so an older entity still appears. `続きやって` has no keywords and returns recent only.
+Continue extracts keywords from `prompt`, searches title, body, apps, and `entities[].value` for each, and merges those hits with the newest `limit` rows. Keyword hits come first so an older entity still appears. `続きやって` has no keywords and returns recent only.
 
 `since` / `until` are optional ISO 8601 datetimes. They filter on `front_matter.window_start` (inclusive) on continue, `/v1/timeline`, and `/v1/search`.
 
@@ -80,7 +80,6 @@ Each memory `front_matter` typically has: `title`, `description`, `apps`, `devic
 ## Search / timeline
 
 ```bash
-# Timeline (optional since / until)
 curl -sS "$SHIFTLOG_API_ORIGIN/v1/timeline?limit=20&since=2026-09-11T00:00:00.000Z&until=2026-09-11T23:59:59.000Z" \
   -H "Authorization: Bearer $SHIFTLOG_API_TOKEN"
 
