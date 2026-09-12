@@ -125,22 +125,31 @@ export async function summarizeTenMinuteWindow(
   return record;
 }
 
-/**
- * Bundle up to 36 ten-minute memories into a six-hour summary.
- */
+export function sixHourBucketUtc(iso: string): { start: string; end: string } {
+  const t = new Date(iso);
+  const hour = Math.floor(t.getUTCHours() / 6) * 6;
+  const start = new Date(
+    Date.UTC(t.getUTCFullYear(), t.getUTCMonth(), t.getUTCDate(), hour, 0, 0, 0),
+  );
+  const end = new Date(start.getTime() + 6 * 60 * 60 * 1000);
+  return { start: start.toISOString(), end: end.toISOString() };
+}
+
+export function sixHourMemoryId(bucketStart: string): string {
+  return `mem_6h_${bucketStart}`;
+}
+
 export function summarizeSixHourBundle(
   store: MemoryStore,
   tenMinuteIds: string[],
+  bucket: { start: string; end: string },
 ): MemoryRecord | null {
   const memories = tenMinuteIds
     .map((id) => store.getMemory(id))
-    .filter((m): m is MemoryRecord => Boolean(m))
-    .slice(0, 36);
+    .filter((m): m is MemoryRecord => Boolean(m));
 
   if (memories.length === 0) return null;
 
-  const window_start = memories[0]!.front_matter.window_start;
-  const window_end = memories[memories.length - 1]!.front_matter.window_end;
   const apps = [...new Set(memories.flatMap((m) => m.front_matter.apps))];
   const devices = new Set(memories.map((m) => m.front_matter.device));
   const device =
@@ -151,26 +160,27 @@ export function summarizeSixHourBundle(
         : "desk";
 
   const now = new Date().toISOString();
-  const id = `mem_6h_${window_start}`;
+  const id = sixHourMemoryId(bucket.start);
+  const existing = store.getMemory(id);
   const body = [
     "## 六時間サマリ",
     "",
-    `十秒窓相当の十分サマリ ${memories.length} 本を束ねた。`,
+    `壁時計 ${bucket.start} → ${bucket.end} の十分サマリ ${memories.length} 本。`,
     "",
     ...memories.map((m) => `- **${m.front_matter.title}**: ${m.front_matter.description}`),
   ].join("\n");
 
   const record: MemoryRecord = {
     id,
-    created_at: now,
+    created_at: existing?.created_at ?? now,
     updated_at: now,
     front_matter: {
       title: "六時間サマリ",
       description: `${memories.length} ten-minute windows`,
       apps,
       device,
-      window_start,
-      window_end,
+      window_start: bucket.start,
+      window_end: bucket.end,
       kind: "six_hour",
       window_ids: memories.flatMap((m) => m.front_matter.window_ids),
       skill_candidate: memories.some((m) => m.front_matter.skill_candidate),

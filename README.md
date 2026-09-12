@@ -38,7 +38,7 @@ Cursor などではリポジトリの Skill を有効化するか、`skills/shif
 
 - **十分窓**: `events.jsonl` 相当のイベント配列 + `metadata.json`
 - **記憶 Markdown**: YAML フロントマターに `title`, `description`, `apps`, `device`, `window_start`, `window_end`
-- 十分サマリと、最大 36 本を束ねた六時間サマリ
+- 十分サマリと、UTC の 00/06/12/18 時で区切った六時間サマリ（同じ区間は同一 ID で上書き）
 - 同一十分窓に PC とスマホがいれば `desk` / `mobile` の二レーン
 
 
@@ -139,6 +139,10 @@ Web UI は `/api/*` の Route Handler 経由で API を呼び、Bearer トーク
 ```bash
 pnpm test
 ```
+
+## レビュー
+
+PR は CodeRabbit と Cursor Bugbot で自動レビューされます。
 
 ## 参考
 
