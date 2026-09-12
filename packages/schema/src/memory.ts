@@ -20,6 +20,10 @@ export const MemoryFrontMatterSchema = z.object({
   /** Flag only — SkillCheck implementation comes later. */
   skill_candidate: z.boolean().default(false),
   skill_candidate_reason: z.string().optional(),
+  /** Per-app dwell seconds inside the window. Sum equals active window time. */
+  apps_dwell: z.record(z.string(), z.number().int().nonnegative()).optional(),
+  sites: z.array(z.string()).optional(),
+  top_app: z.string().optional(),
 });
 export type MemoryFrontMatter = z.infer<typeof MemoryFrontMatterSchema>;
 
@@ -49,6 +53,11 @@ export function serializeMemoryMarkdown(record: MemoryRecord): string {
     ...(fm.skill_candidate_reason
       ? [`skill_candidate_reason: ${JSON.stringify(fm.skill_candidate_reason)}`]
       : []),
+    ...(fm.apps_dwell
+      ? [`apps_dwell: ${JSON.stringify(fm.apps_dwell)}`]
+      : []),
+    ...(fm.sites ? [`sites: [${fm.sites.map((s) => JSON.stringify(s)).join(", ")}]`] : []),
+    ...(fm.top_app ? [`top_app: ${JSON.stringify(fm.top_app)}`] : []),
     "---",
     "",
     record.body.trim(),

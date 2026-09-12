@@ -65,7 +65,7 @@ curl -sS "$SHIFTLOG_API_ORIGIN/v1/agent/recent?limit=12" \
 | `note` | Reminder: read-only; no Computer Use |
 | `prompt` | Echo of continue prompt (continue endpoint only) |
 
-Each memory `front_matter` typically has: `title`, `description`, `apps`, `device` (`desk` \| `mobile` \| `both`), `window_start`, `window_end`, `kind` (`ten_minute` \| `six_hour`), optional `skill_candidate`.
+Each memory `front_matter` typically has: `title`, `description`, `apps`, `device` (`desk` \| `mobile` \| `both`), `window_start`, `window_end`, `kind` (`ten_minute` \| `six_hour`), optional `skill_candidate`, and on ten-minute rows `apps_dwell`, `sites`, `top_app`.
 
 ## Search / timeline
 

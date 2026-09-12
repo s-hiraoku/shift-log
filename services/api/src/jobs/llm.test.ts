@@ -80,6 +80,6 @@ describe("optional LLM summarization", () => {
     const fallback = deterministicTenMinuteBody(upload);
     const record = await summarizeTenMinuteWindow(store, upload);
     expect(record.front_matter.title).toBe(fallback.title);
-    expect(record.body).toContain("作業サマリ");
+    expect(record.body).toContain("Focus span");
   });
 });
