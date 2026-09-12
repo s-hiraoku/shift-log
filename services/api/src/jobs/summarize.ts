@@ -2,6 +2,7 @@ import type { InteractionEvent, MemoryRecord, WindowUpload } from "@shift-log/sc
 import { serializeMemoryMarkdown } from "@shift-log/schema";
 import type { MemoryStore } from "../lib/store.js";
 import { summarizeWithLlm } from "./llm.js";
+import { aggregateTenMinuteWindow, renderTenMinuteBody } from "./ten-minute.js";
 
 function uniqueApps(events: InteractionEvent[]): string[] {
   return [...new Set(events.map((e) => e.app).filter((a): a is string => Boolean(a)))];
@@ -21,7 +22,6 @@ function detectSkillCandidate(events: InteractionEvent[]): {
 } {
   const apps = uniqueApps(events);
   const switches = events.filter((e) => e.type === "app_switch").length;
-  // Heuristic only — SkillCheck will own real detection later.
   if (switches >= 4 && apps.length <= 2) {
     return {
       skill_candidate: true,
@@ -36,60 +36,24 @@ export function deterministicTenMinuteBody(upload: WindowUpload): {
   body: string;
   apps: string[];
   skill: ReturnType<typeof detectSkillCandidate>;
+  aggregate: ReturnType<typeof aggregateTenMinuteWindow>;
 } {
-  const { metadata, events } = upload;
-  const apps = uniqueApps(events);
-  const skill = detectSkillCandidate(events);
-  const byLane = {
-    desk: events.filter((e) => e.device === "desk"),
-    mobile: events.filter((e) => e.device === "mobile"),
-  };
-  const lines: string[] = [
-    "## 作業サマリ",
-    "",
-    `- 窓: ${metadata.window_start} → ${metadata.window_end}`,
-    `- イベント数: ${events.length}`,
-    `- アプリ: ${apps.length ? apps.join(", ") : "(なし)"}`,
-  ];
-  if (metadata.dual_lane) {
-    lines.push(
-      "",
-      "### desk レーン",
-      ...byLane.desk
-        .slice(0, 8)
-        .map((e) => `- ${e.type}${e.app ? ` @ ${e.app}` : ""}${e.summary ? `: ${e.summary}` : ""}`),
-      "",
-      "### mobile レーン",
-      ...byLane.mobile
-        .slice(0, 8)
-        .map((e) => `- ${e.type}${e.app ? ` @ ${e.app}` : ""}${e.summary ? `: ${e.summary}` : ""}`),
-    );
-  } else {
-    lines.push(
-      "",
-      "### イベント",
-      ...events
-        .slice(0, 12)
-        .map(
-          (e) =>
-            `- [${e.device}] ${e.type}${e.app ? ` @ ${e.app}` : ""}${e.summary ? `: ${e.summary}` : ""}`,
-        ),
-    );
-  }
-  if (skill.skill_candidate) {
-    lines.push("", `> skill_candidate: ${skill.skill_candidate_reason}`);
-  }
+  const apps = uniqueApps(upload.events);
+  const skill = detectSkillCandidate(upload.events);
+  const aggregate = aggregateTenMinuteWindow(upload);
   const title =
     apps.length > 0
       ? `${apps.slice(0, 2).join(" / ")} — 10分サマリ`
       : "Activity — 10分サマリ";
-  return { title, body: lines.join("\n"), apps, skill };
+  return {
+    title,
+    body: renderTenMinuteBody(aggregate, skill),
+    apps,
+    skill,
+    aggregate,
+  };
 }
 
-/**
- * Turns a 10-minute window into Markdown memory.
- * Uses SHIFTLOG_LLM_* when configured; otherwise a deterministic template.
- */
 export async function summarizeTenMinuteWindow(
   store: MemoryStore,
   upload: WindowUpload,
@@ -99,7 +63,7 @@ export async function summarizeTenMinuteWindow(
   const llm = await summarizeWithLlm(upload);
   const title = llm?.title ?? fallback.title;
   const body = llm?.body ?? fallback.body;
-  const { apps, skill } = fallback;
+  const { apps, skill, aggregate } = fallback;
   const now = new Date().toISOString();
 
   const record: MemoryRecord = {
@@ -117,6 +81,9 @@ export async function summarizeTenMinuteWindow(
       window_ids: [metadata.window_id],
       skill_candidate: skill.skill_candidate,
       skill_candidate_reason: skill.skill_candidate_reason,
+      apps_dwell: aggregate.apps_dwell,
+      sites: aggregate.sites,
+      top_app: aggregate.top_app,
     },
     body,
   };

@@ -100,12 +100,17 @@ describe("memory markdown", () => {
         kind: "ten_minute",
         window_ids: ["w1"],
         skill_candidate: false,
+        apps_dwell: { Code: 420, Terminal: 180 },
+        sites: ["github.com"],
+        top_app: "Code",
       },
-      body: "## 作業サマリ\n\nスキーマを定義した。",
+      body: "## アプリ別滞在時間\n\n- 01:00 Code 420秒",
     };
     const md = serializeMemoryMarkdown(record);
     expect(md).toContain("title:");
     expect(md).toContain("window_start:");
-    expect(md).toContain("作業サマリ");
+    expect(md).toContain("apps_dwell:");
+    expect(md).toContain("top_app: \"Code\"");
+    expect(md).toContain("アプリ別滞在時間");
   });
 });
