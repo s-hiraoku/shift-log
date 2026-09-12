@@ -131,7 +131,7 @@ Web UI は `/api/*` の Route Handler 経由で API を呼び、Bearer トーク
 | POST | `/v1/history/delete` | 直近十分 / 一時間 / 一日 / 全部（イベントも記憶も削除） |
 | GET | `/v1/agent/recent` | エージェント向け直近記憶（読み取り） |
 | POST | `/v1/agent/continue` | 「続きやって」→ `mode: context_only` |
-| GET | `/internal/cron/purge` | 48h 生イベント破棄（`CRON_SECRET`） |
+| GET | `/internal/cron/purge` | 48h 生イベント + 期限切れ十分記憶の破棄（`CRON_SECRET`） |
 
 ## Vercel
 

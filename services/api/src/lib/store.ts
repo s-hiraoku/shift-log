@@ -58,6 +58,24 @@ export function isRawWindowExpired(
   return new Date(metadata.window_end) < hoursAgo(RAW_EVENT_RETENTION_HOURS, now);
 }
 
+export function tenMinuteRetentionDays(
+  raw = process.env.SHIFTLOG_TEN_MINUTE_RETENTION_DAYS,
+): number {
+  const n = raw === undefined || raw === "" ? 14 : Number(raw);
+  if (!Number.isFinite(n) || n < 1) return 14;
+  return Math.floor(n);
+}
+
+export function isTenMinuteMemoryExpired(
+  record: Pick<MemoryRecord, "front_matter">,
+  now = new Date(),
+  days = tenMinuteRetentionDays(),
+): boolean {
+  if (record.front_matter.kind !== "ten_minute") return false;
+  const cutoff = new Date(now.getTime() - days * 24 * 60 * 60 * 1000);
+  return new Date(record.front_matter.window_end) < cutoff;
+}
+
 /**
  * Per-user store. Durable backend is SQLite (SHIFTLOG_DATA_DIR/shiftlog.db)
  * or Postgres (DATABASE_URL). Tests stay in-memory (VITEST / SHIFTLOG_PERSIST=0).
@@ -79,6 +97,7 @@ export class MemoryStore {
     this.windows = new Map(snapshot.windows.map((w) => [w.metadata.window_id, w]));
     this.memories = new Map(snapshot.memories.map((m) => [m.id, m]));
     this.purgeExpiredRawEvents();
+    this.purgeExpiredTenMinuteMemories();
     this.hydrated = true;
   }
 
@@ -174,6 +193,18 @@ export class MemoryStore {
     return removed;
   }
 
+  purgeExpiredTenMinuteMemories(now = new Date()): number {
+    let removed = 0;
+    for (const [id, memory] of this.memories) {
+      if (isTenMinuteMemoryExpired(memory, now)) {
+        this.memories.delete(id);
+        removed += 1;
+      }
+    }
+    if (removed > 0) this.persist();
+    return removed;
+  }
+
   /**
    * Clearing history deletes matching interaction events AND memories.
    * Match any interval that overlaps the selected period (window_end >= cutoff).
@@ -243,7 +274,9 @@ export function purgeAllTenants(now = new Date()): number {
   let removed = 0;
   const ids = new Set<string>(["default", ...listPersistedUserIdsSync(), ...cache.keys()]);
   for (const id of ids) {
-    removed += storeFor(id).purgeExpiredRawEvents(now);
+    const tenant = storeFor(id);
+    removed += tenant.purgeExpiredRawEvents(now);
+    removed += tenant.purgeExpiredTenMinuteMemories(now);
   }
   return removed;
 }

@@ -200,9 +200,15 @@ export function loadTenantSync(userId: string): TenantSnapshot {
   return backend.load(userId) ?? emptySnapshot();
 }
 
+function logSnapshotSize(userId: string, snapshot: TenantSnapshot): void {
+  const bytes = Buffer.byteLength(JSON.stringify(snapshot));
+  console.log(`[persist] snapshot user=${userId} bytes=${bytes}`);
+}
+
 export function saveTenantSync(userId: string, snapshot: TenantSnapshot): void {
   const backend = openBackend();
   if (!backend) return;
+  logSnapshotSize(userId, snapshot);
   if (backend instanceof PostgresBackend) {
     void backend.save(userId, snapshot).catch((err) => {
       console.error("[persist] postgres save failed:", err);
@@ -227,6 +233,7 @@ export async function saveTenantAsync(
 ): Promise<void> {
   const backend = openBackend();
   if (!backend) return;
+  logSnapshotSize(userId, snapshot);
   if (backend instanceof PostgresBackend) {
     await backend.save(userId, snapshot);
     return;
