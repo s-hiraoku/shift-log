@@ -134,6 +134,10 @@ Web UI は `/api/*` の Route Handler 経由で API を呼び、Bearer トーク
 pnpm test
 ```
 
+## レビュー
+
+PR は CodeRabbit と Cursor Bugbot で自動レビューされます。
+
 ## 参考
 
 - 公式仕様: https://learn.chatgpt.com/docs/customization/computer-history
