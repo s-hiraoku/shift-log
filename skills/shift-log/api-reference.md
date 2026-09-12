@@ -27,8 +27,8 @@ Authorization: Bearer <SHIFTLOG_API_TOKEN>
 | Method | Path | Body / query | Notes |
 | --- | --- | --- | --- |
 | POST | `/v1/windows` | `WindowUpload` | Rejects if collection disabled (403), capture older than 48h (410), or body larger than `SHIFTLOG_MAX_UPLOAD_BYTES` (413). Sanitizes private browsing + `keyText`. Optional LLM summary when `SHIFTLOG_LLM_API_KEY` is set |
-| GET | `/v1/timeline` | `q?`, `limit?`, `cursor?` | Memory list |
-| GET | `/v1/search` | `q`, `limit?` | Keyword search over title/description/body/apps |
+| GET | `/v1/timeline` | `q?`, `limit?`, `cursor?`, `kind?`, `since?`, `until?` | Memory list. `since` / `until` are ISO 8601 and filter `window_start` inclusively |
+| GET | `/v1/search` | `q`, `limit?`, `kind?`, `since?`, `until?` | Keyword search over title/description/body/apps/`entities[].value` |
 | GET | `/v1/memories/:id` | — | Single memory |
 | POST | `/v1/history/delete` | `{ "scope": "last_10_minutes"\|"last_hour"\|"last_day"\|"all" }` | Deletes overlapping windows **and** memories |
 
@@ -37,7 +37,7 @@ Authorization: Bearer <SHIFTLOG_API_TOKEN>
 | Method | Path | Body / query | Notes |
 | --- | --- | --- | --- |
 | GET | `/v1/agent/recent` | `limit?` (max 36) | `{ mode: "context_only", memories, note }` |
-| POST | `/v1/agent/continue` | `{ "prompt"?: string, "limit"?: number }` | Same mode; echoes `prompt` |
+| POST | `/v1/agent/continue` | `{ "prompt"?: string, "limit"?: number, "since"?: string, "until"?: string }` | Keyword hits from `prompt` merged with recent rows. Each memory has `matched_by`: `recent` \| `keyword` |
 
 **Invariant:** agent endpoints never execute Computer Use.
 
@@ -63,5 +63,6 @@ const res = await fetch(`${origin}/v1/agent/continue`, {
 });
 const data = await res.json();
 // data.mode === "context_only"
+// data.memories[i].matched_by === "recent" | "keyword"
 // use data.memories as working memory; do not control the OS
 ```

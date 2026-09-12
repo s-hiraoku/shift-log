@@ -6,6 +6,8 @@ Agents ask ShiftLog to resume prior work. v1 returns memories and `mode: "contex
 
 - `continue-context` POSTs `/v1/agent/continue` and receives `mode: "context_only"` plus `memories`.
 - `continue-echo` echoes the request `prompt`.
+- `continue-keyword` uses `prompt` tokens against title/body/apps/`entities` and tags `matched_by`.
+- `continue-range` accepts `since` / `until` (ISO 8601) and drops rows whose `window_start` is outside that inclusive range. The same pair is on `/v1/timeline` and `/v1/search`.
 - `recent-context` GETs `/v1/agent/recent` with the same `mode` and a read-only note.
 - `continue-empty` still returns `context_only` when the timeline is empty (`memories: []`).
 
@@ -31,7 +33,9 @@ curl -sS -X POST "$SHIFTLOG_API_ORIGIN/v1/agent/continue" \
   -d '{"prompt":"続きやって","limit":12}'
 ```
 
-Exit 0. JSON has `mode` exactly `context_only`, `prompt` exactly `続きやって`, a `memories` array with the demo titles, and a `note` that says context only / do not operate the computer.
+Exit 0. JSON has `mode` exactly `context_only`, `prompt` exactly `続きやって`, a `memories` array with the demo titles, each item `matched_by` `recent` or `keyword`, and a `note` that says context only / do not operate the computer.
+
+- **Range miss.** After seed, GET `$SHIFTLOG_API_ORIGIN/v1/timeline?since=2099-01-01T00:00:00.000Z&until=2099-01-01T01:00:00.000Z`. `items` is `[]`. POST continue with the same `since` / `until` also returns `memories: []`.
 
 - **Recent read.** Run `curl -sS "$SHIFTLOG_API_ORIGIN/v1/agent/recent?limit=12" -H "Authorization: Bearer $SHIFTLOG_API_TOKEN"`. `mode` is `context_only`. There is no `prompt` field. `memories` is a list.
 - **Empty instance.** On an unseeded launch, POST continue. `mode` is still `context_only` and `memories` is `[]`. That is success, not a failed resume.

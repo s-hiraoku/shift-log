@@ -27,8 +27,9 @@ ShiftLog stores permission-based activity memories (Markdown) so agents can resu
 
 ## Setup
 
+If `SHIFTLOG_API_ORIGIN` is unset, use `http://localhost:8787`. If `SHIFTLOG_API_TOKEN` is unset, use `dev-token`. Local MVP auth accepts that pair.
+
 ```bash
-# API (default)
 export SHIFTLOG_API_ORIGIN="${SHIFTLOG_API_ORIGIN:-http://localhost:8787}"
 export SHIFTLOG_API_TOKEN="${SHIFTLOG_API_TOKEN:-dev-token}"
 ```
@@ -46,7 +47,7 @@ Auth: `Authorization: Bearer $SHIFTLOG_API_TOKEN` on every `/v1/*` call.
 curl -sS -X POST "$SHIFTLOG_API_ORIGIN/v1/agent/continue" \
   -H "Authorization: Bearer $SHIFTLOG_API_TOKEN" \
   -H "Content-Type: application/json" \
-  -d '{"prompt":"続きやって","limit":12}'
+  -d '{"prompt":"昨日の午後の ponytail","limit":12,"since":"2026-09-11T00:00:00.000Z","until":"2026-09-11T23:59:59.000Z"}'
 ```
 
 Equivalent recent read:
@@ -61,21 +62,30 @@ curl -sS "$SHIFTLOG_API_ORIGIN/v1/agent/recent?limit=12" \
 | Field | Meaning |
 | --- | --- |
 | `mode` | Always `context_only` in v1 |
-| `memories` | Markdown memory records (front_matter + body) |
+| `memories` | Markdown memory records (front_matter + body) plus `matched_by` |
+| `matched_by` | `keyword` if a prompt token hit title/body/apps/`entities`; otherwise `recent` |
 | `note` | Reminder: read-only; no Computer Use |
 | `prompt` | Echo of continue prompt (continue endpoint only) |
 
+Continue extracts keywords from `prompt`, runs `listMemories({ q })` for each, and merges those hits with the newest `limit` rows. Keyword hits come first so an older entity still appears. `続きやって` has no keywords and returns recent only.
+
+`since` / `until` are optional ISO 8601 datetimes. They filter on `front_matter.window_start` (inclusive) on continue, `/v1/timeline`, and `/v1/search`.
+
 Each memory `front_matter` typically has: `title`, `description`, `apps`, `device` (`desk` \| `mobile` \| `both`), `window_start`, `window_end`, `kind` (`ten_minute` \| `six_hour`), optional `skill_candidate`, and on ten-minute rows `apps_dwell`, `sites`, `top_app`, `entities`.
+
+### Reading `entities`
+
+`front_matter.entities` is `{ kind, value }[]`. Kinds are `github_repo`, `github_pr`, `slack_channel`, `url`, `file`. Use `value` as the resume target (repo `DietrichGebert/ponytail`, PR `owner/repo#12`, Slack channel name). Search and continue keywords match the `value` string, so `prompt: "ponytail"` finds that repo even when it is not in the recent window.
 
 ## Search / timeline
 
 ```bash
-# Timeline
-curl -sS "$SHIFTLOG_API_ORIGIN/v1/timeline?limit=20" \
+# Timeline (optional since / until)
+curl -sS "$SHIFTLOG_API_ORIGIN/v1/timeline?limit=20&since=2026-09-11T00:00:00.000Z&until=2026-09-11T23:59:59.000Z" \
   -H "Authorization: Bearer $SHIFTLOG_API_TOKEN"
 
 # Search
-curl -sS "$SHIFTLOG_API_ORIGIN/v1/search?q=Code&limit=20" \
+curl -sS "$SHIFTLOG_API_ORIGIN/v1/search?q=ponytail&limit=20&since=2026-09-11T00:00:00.000Z" \
   -H "Authorization: Bearer $SHIFTLOG_API_TOKEN"
 
 # One memory
@@ -106,6 +116,8 @@ curl -sS -X POST "$SHIFTLOG_API_ORIGIN/v1/demo/seed" \
 
 - [ ] Authenticated with Bearer token
 - [ ] Used `/v1/agent/continue` or `/v1/agent/recent` for resume
+- [ ] Passed `since` / `until` when the user named a time window
+- [ ] Read `front_matter.entities` and `matched_by` before summarizing
 - [ ] Treated output as **context only**
 - [ ] Did not claim to control the user's computer via ShiftLog
 - [ ] Surfaced `skill_candidate` memories as hints only (SkillCheck is out of scope for v1)
