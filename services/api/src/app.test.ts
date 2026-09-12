@@ -426,4 +426,128 @@ describe("ShiftLog API", () => {
     ).toBe(true);
     expect(tensBody.items.length).toBeGreaterThan(0);
   });
+
+  it("continues with a keyword that is not in the recent window", async () => {
+    const older = "2026-09-10T08:00:00.000Z";
+    store.putMemory({
+      id: "pony",
+      created_at: older,
+      updated_at: older,
+      front_matter: {
+        title: "Ghostty / Slack",
+        description: "PR review",
+        apps: ["ghostty", "Slack"],
+        device: "desk",
+        window_start: older,
+        window_end: "2026-09-10T08:10:00.000Z",
+        kind: "ten_minute",
+        window_ids: ["pony"],
+        skill_candidate: false,
+        entities: [{ kind: "github_repo", value: "DietrichGebert/ponytail" }],
+      },
+      body: "reviewed a PR",
+    });
+    for (let i = 0; i < 15; i += 1) {
+      const start = new Date(Date.now() - i * 10 * 60_000).toISOString();
+      store.putMemory({
+        id: `recent-${i}`,
+        created_at: start,
+        updated_at: start,
+        front_matter: {
+          title: `Recent ${i}`,
+          description: "unrelated",
+          apps: ["Code"],
+          device: "desk",
+          window_start: start,
+          window_end: new Date(new Date(start).getTime() + 10 * 60_000).toISOString(),
+          kind: "ten_minute",
+          window_ids: [`recent-${i}`],
+          skill_candidate: false,
+        },
+        body: "editor work",
+      });
+    }
+
+    const cont = await app.request("/v1/agent/continue", {
+      method: "POST",
+      headers: authHeaders(),
+      body: JSON.stringify({ prompt: "ponytail", limit: 12 }),
+    });
+    expect(cont.status).toBe(200);
+    const body = await cont.json();
+    expect(body.mode).toBe("context_only");
+    expect(body.memories.find((m: { id: string }) => m.id === "pony")).toEqual(
+      expect.objectContaining({
+        id: "pony",
+        matched_by: "keyword",
+      }),
+    );
+    expect(body.memories.some((m: { matched_by: string }) => m.matched_by === "recent")).toBe(
+      true,
+    );
+  });
+
+  it("excludes memories outside since/until on continue, timeline, and search", async () => {
+    store.putMemory({
+      id: "pony",
+      created_at: "2026-09-10T08:00:00.000Z",
+      updated_at: "2026-09-10T08:00:00.000Z",
+      front_matter: {
+        title: "Ghostty / Slack",
+        description: "PR review",
+        apps: ["ghostty", "Slack"],
+        device: "desk",
+        window_start: "2026-09-10T08:00:00.000Z",
+        window_end: "2026-09-10T08:10:00.000Z",
+        kind: "ten_minute",
+        window_ids: ["pony"],
+        skill_candidate: false,
+        entities: [{ kind: "github_repo", value: "DietrichGebert/ponytail" }],
+      },
+      body: "reviewed a PR",
+    });
+    store.putMemory({
+      id: "today",
+      created_at: "2026-09-12T12:00:00.000Z",
+      updated_at: "2026-09-12T12:00:00.000Z",
+      front_matter: {
+        title: "Code",
+        description: "today",
+        apps: ["Code"],
+        device: "desk",
+        window_start: "2026-09-12T12:00:00.000Z",
+        window_end: "2026-09-12T12:10:00.000Z",
+        kind: "ten_minute",
+        window_ids: ["today"],
+        skill_candidate: false,
+      },
+      body: "today",
+    });
+
+    const since = "2026-09-12T00:00:00.000Z";
+    const until = "2026-09-12T23:59:59.000Z";
+    const cont = await app.request("/v1/agent/continue", {
+      method: "POST",
+      headers: authHeaders(),
+      body: JSON.stringify({ prompt: "ponytail", since, until }),
+    });
+    const contBody = await cont.json();
+    expect(contBody.memories.map((m: { id: string }) => m.id)).toEqual(["today"]);
+    expect(contBody.memories[0].matched_by).toBe("recent");
+
+    const timeline = await app.request(
+      `/v1/timeline?since=${encodeURIComponent(since)}&until=${encodeURIComponent(until)}`,
+      { headers: authHeaders() },
+    );
+    expect((await timeline.json()).items.map((m: { id: string }) => m.id)).toEqual(["today"]);
+
+    const search = await app.request(
+      `/v1/search?q=ponytail&since=${encodeURIComponent(since)}&until=${encodeURIComponent(until)}`,
+      { headers: authHeaders() },
+    );
+    expect((await search.json()).items).toEqual([]);
+
+    const searchAll = await app.request("/v1/search?q=ponytail", { headers: authHeaders() });
+    expect((await searchAll.json()).items.map((m: { id: string }) => m.id)).toEqual(["pony"]);
+  });
 });

@@ -11,6 +11,7 @@ import {
 import { requireAuth } from "./middleware/auth.js";
 import { rateLimit } from "./middleware/rate-limit.js";
 import { audit } from "./lib/audit.js";
+import { extractKeywords, mergeContinueMemories } from "./lib/continue-context.js";
 import { sanitizeWindowUpload } from "./lib/sanitize.js";
 import { isRawWindowExpired, purgeAllTenants, storeFor, type MemoryStore } from "./lib/store.js";
 import {
@@ -174,6 +175,8 @@ export function createApp() {
       limit: c.req.query("limit") ?? "50",
       cursor: c.req.query("cursor"),
       kind: c.req.query("kind") || undefined,
+      since: c.req.query("since") || undefined,
+      until: c.req.query("until") || undefined,
     });
     return c.json({ items: tenant(c).listMemories(query), next_cursor: null });
   });
@@ -189,6 +192,8 @@ export function createApp() {
       q: c.req.query("q") ?? "",
       limit: c.req.query("limit") ?? "50",
       kind: c.req.query("kind") || undefined,
+      since: c.req.query("since") || undefined,
+      until: c.req.query("until") || undefined,
     });
     return c.json({ items: tenant(c).listMemories(query) });
   });
@@ -227,7 +232,23 @@ export function createApp() {
     const body = ContinueContextRequestSchema.parse(
       (await c.req.json().catch(() => ({}))) ?? {},
     );
-    const memories = tenant(c).listMemories({ limit: body.limit });
+    const store = tenant(c);
+    const range = { since: body.since, until: body.until };
+    const recent = store.listMemories({ limit: body.limit, ...range });
+    const keywordHits: typeof recent = [];
+    const seen = new Set<string>();
+    for (const q of extractKeywords(body.prompt)) {
+      for (const memory of store.listMemories({ q, limit: body.limit, ...range })) {
+        if (seen.has(memory.id)) continue;
+        seen.add(memory.id);
+        keywordHits.push(memory);
+      }
+    }
+    const memories = mergeContinueMemories({
+      recent,
+      keywordHits,
+      limit: body.limit,
+    });
     return c.json({
       mode: "context_only" as const,
       prompt: body.prompt,
