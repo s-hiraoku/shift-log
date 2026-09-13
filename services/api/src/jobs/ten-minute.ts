@@ -12,6 +12,7 @@ export type FocusSpan = {
 export type TenMinuteAggregate = {
   apps_dwell: Record<string, number>;
   sites: string[];
+  projects: string[];
   top_app?: string;
   spans: FocusSpan[];
   active_seconds: number;
@@ -40,6 +41,29 @@ function lastSite(events: InteractionEvent[]): string | undefined {
   return sites[sites.length - 1];
 }
 
+function projectFromMeta(meta: InteractionEvent["meta"]): string | undefined {
+  if (!meta) return undefined;
+  if (typeof meta.project === "string" && meta.project.trim()) return meta.project.trim();
+  if (typeof meta.cwd === "string" && meta.cwd.trim()) {
+    const parts = meta.cwd.replace(/\/+$/, "").split("/");
+    const last = parts[parts.length - 1];
+    if (last && last !== "~") return last;
+  }
+  return undefined;
+}
+
+function uniqueProjects(events: InteractionEvent[]): string[] {
+  const seen = new Set<string>();
+  const projects: string[] = [];
+  for (const event of events) {
+    const project = projectFromMeta(event.meta);
+    if (!project || seen.has(project)) continue;
+    seen.add(project);
+    projects.push(project);
+  }
+  return projects;
+}
+
 export function aggregateTenMinuteWindow(upload: WindowUpload): TenMinuteAggregate {
   const { metadata, events } = upload;
   const focused = [...events]
@@ -47,8 +71,9 @@ export function aggregateTenMinuteWindow(upload: WindowUpload): TenMinuteAggrega
     .sort((a, b) => a.ts.localeCompare(b.ts) || a.id.localeCompare(b.id));
 
   const sites = [...new Set(focused.map((e) => e.site).filter((s): s is string => Boolean(s)))];
+  const projects = uniqueProjects(focused);
   if (focused.length === 0) {
-    return { apps_dwell: {}, sites, spans: [], active_seconds: 0 };
+    return { apps_dwell: {}, sites, projects, spans: [], active_seconds: 0 };
   }
 
   const groups: InteractionEvent[][] = [];
@@ -88,7 +113,7 @@ export function aggregateTenMinuteWindow(upload: WindowUpload): TenMinuteAggrega
     return dwell > (apps_dwell[best] ?? 0) ? app : best;
   }, undefined);
 
-  return { apps_dwell, sites, top_app, spans, active_seconds };
+  return { apps_dwell, sites, projects, top_app, spans, active_seconds };
 }
 
 export function renderTenMinuteBody(

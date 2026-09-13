@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import type { InteractionEvent, WindowUpload } from "@shift-log/schema";
-import { deterministicTenMinuteBody } from "./summarize.js";
+import { serializeMemoryMarkdown } from "@shift-log/schema";
+import { MemoryStore } from "../lib/store.js";
+import { deterministicTenMinuteBody, summarizeTenMinuteWindow } from "./summarize.js";
 
 const WINDOW_START = "2026-09-11T06:39:00.000Z";
 const WINDOW_END = "2026-09-11T06:49:00.000Z";
@@ -110,6 +112,7 @@ describe("deterministicTenMinuteBody", () => {
     );
     expect(out.aggregate.top_app).toBe("ghostty");
     expect(out.aggregate.sites).toEqual(["github.com"]);
+    expect(out.aggregate.projects).toEqual([]);
     expect(out.aggregate.spans).toHaveLength(7);
 
     const contentLines = out.body
@@ -118,5 +121,57 @@ describe("deterministicTenMinuteBody", () => {
     for (const line of contentLines.filter((line) => line.startsWith("- "))) {
       expect(line).toMatch(/\d{2}:\d{2}/);
     }
+  });
+
+  it("collects projects from editor and terminal title meta", () => {
+    const upload = ghosttySlackRoundTripUpload();
+    upload.events = [
+      event("e01", "2026-09-11T06:39:00.000Z", "app_switch", "Cursor", "Focused Cursor"),
+      {
+        ...event(
+          "e02",
+          "2026-09-11T06:39:15.000Z",
+          "front_window_summary",
+          "Cursor",
+          "shift-log — collector.ts",
+        ),
+        meta: { file: "collector.ts", project: "shift-log" },
+      },
+      event("e03", "2026-09-11T06:44:00.000Z", "app_switch", "ghostty", "Focused ghostty"),
+      {
+        ...event(
+          "e04",
+          "2026-09-11T06:44:15.000Z",
+          "front_window_summary",
+          "ghostty",
+          "~/src/kaizen (main)",
+        ),
+        meta: { cwd: "~/src/kaizen", branch: "main" },
+      },
+    ];
+    const out = deterministicTenMinuteBody(upload);
+    expect(out.aggregate.projects).toEqual(["shift-log", "kaizen"]);
+  });
+});
+
+describe("summarizeTenMinuteWindow projects", () => {
+  it("writes projects onto memory front_matter", async () => {
+    const store = new MemoryStore("projects-front-matter");
+    const upload = ghosttySlackRoundTripUpload();
+    upload.events = [
+      {
+        ...event(
+          "e02",
+          "2026-09-11T06:39:15.000Z",
+          "front_window_summary",
+          "Cursor",
+          "shift-log — collector.ts",
+        ),
+        meta: { file: "collector.ts", project: "shift-log" },
+      },
+    ];
+    const record = await summarizeTenMinuteWindow(store, upload);
+    expect(record.front_matter.projects).toEqual(["shift-log"]);
+    expect(serializeMemoryMarkdown(record)).toContain('projects: ["shift-log"]');
   });
 });

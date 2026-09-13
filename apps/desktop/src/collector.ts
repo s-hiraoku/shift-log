@@ -6,7 +6,11 @@ import {
   type WindowUpload,
   WINDOW_DURATION_MINUTES,
 } from "@shift-log/schema";
-import { observeFrontWindow, type FrontWindow } from "./os-observe.js";
+import {
+  interpretWindowTitle,
+  observeFrontWindow,
+  type FrontWindow,
+} from "./os-observe.js";
 import { getApiToken } from "./credentials.js";
 import { startControlServer, type ControlState } from "./control-server.js";
 
@@ -205,12 +209,17 @@ function emitDemoTick(
   return appIdx + 1;
 }
 
+function titleMeta(observed: FrontWindow): FrontWindow["meta"] {
+  return observed.meta ?? interpretWindowTitle(observed.app, observed.title);
+}
+
 export function emitOsTick(
   collector: DesktopCollector,
   observed: FrontWindow,
   last: { app: string; title: string } | null,
 ): { app: string; title: string } {
   const now = new Date().toISOString();
+  const meta = titleMeta(observed);
   if (observed.privateBrowsing) return last ?? { app: observed.app, title: observed.title };
   if (!last || last.app !== observed.app) {
     collector.observe({
@@ -220,6 +229,7 @@ export function emitOsTick(
       app: observed.app,
       site: observed.site,
       summary: `Focused ${observed.app}`,
+      ...(meta ? { meta } : {}),
     });
   }
   if (observed.site && (!last || last.title !== observed.title)) {
@@ -230,6 +240,7 @@ export function emitOsTick(
       app: observed.app,
       site: observed.site,
       summary: observed.title.slice(0, 200) || observed.site,
+      ...(meta ? { meta } : {}),
     });
   } else if (!last || last.title !== observed.title) {
     collector.observe({
@@ -239,6 +250,7 @@ export function emitOsTick(
       app: observed.app,
       site: observed.site,
       summary: observed.title.slice(0, 200) || observed.app,
+      ...(meta ? { meta } : {}),
     });
   }
   return { app: observed.app, title: observed.title };
