@@ -77,7 +77,7 @@ npm exec --package="$(node -p "require('./package.json').packageManager")" -- pn
 - レート制限・アップロード上限・監査ログ・48h purge（自前ホスト + Vercel Cron）
 - エージェント向け `context_only`（Computer Use なし）
 
-運用手順（常駐・キーチェーン・Cron・署名）: [`docs/ops.md`](docs/ops.md)
+運用手順（常駐・キーチェーン・Cron・署名）: [`docs/ops.md`](docs/ops.md)。macOS の常駐は `pnpm setup:launchd`（`node` のフルパスと `dist/*.js`。手で `YOU` を書き換えない）。
 
 ### まだスタブのもの
 
