@@ -1,6 +1,8 @@
 import {
   canCollect,
   isSourceAllowed,
+  omitTitleFields,
+  titlePolicyFor,
   type InteractionEvent,
   type PermissionsConfig,
   type WindowUpload,
@@ -82,8 +84,9 @@ export class DesktopCollector {
     if (event.meta?.privateBrowsing === true) {
       return;
     }
-    // Never accept full keystroke payloads
-    if (event.type === "typing_presence" && typeof event.meta?.keyText === "string") {
+    if (event.app && titlePolicyFor(this.permissions, event.app) === "app_only") {
+      event = omitTitleFields(event);
+    } else if (event.type === "typing_presence" && typeof event.meta?.keyText === "string") {
       const { keyText: _removed, ...rest } = event.meta;
       event = { ...event, meta: rest };
     }
