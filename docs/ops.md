@@ -80,13 +80,38 @@ Linux 収集には `xdotool`（なければ `xprop`）が必要です。
 
 ### macOS（launchd）
 
+`packaging/macos/*.plist` はそのままでは動きません。`pnpm` は launchd の PATH に無く、API の `start` は `node dist/server.js` なので先に `pnpm build` が必要です。次のコマンドが両方をやります。
+
 ```bash
-# WorkingDirectory / ログパスの YOU を置き換える
-cp packaging/macos/com.shiftlog.collector.plist ~/Library/LaunchAgents/
-launchctl load ~/Library/LaunchAgents/com.shiftlog.collector.plist
+pnpm install
+cp .env.example .env
+# SHIFTLOG_API_TOKEN を推測されにくい値に変更する
+pnpm --filter @shift-log/desktop credentials set "$SHIFTLOG_API_TOKEN"
+pnpm setup:launchd
 ```
 
-初回はシステム設定 → プライバシーとセキュリティ → アクセシビリティで Node / ターミナルを許可。
+`pnpm setup:launchd` は `pnpm build` のあと、このマシンの `node` フルパスとリポジトリパスで plist を生成し、`~/Library/LaunchAgents` へ書いて `launchctl bootstrap` します。再実行しても同じ状態に収束します。
+
+コレクタのトークンはキーチェーン（または `~/.config/shiftlog/credentials.json`）から読むので、コレクタ側 plist には書きません。API のトークンはリポジトリ直下の `.env` を `scripts/load-root-env.mjs` 経由で読みます。plist に `SHIFTLOG_API_TOKEN` は入りません。
+
+確認:
+
+- `~/Library/Logs/shiftlog-api.log` に `ShiftLog API listening on http://localhost:8787`
+- `~/Library/Logs/shiftlog-collector.log` に `[desktop] collector ready`
+- 収集を設定で有効化すると、約 10 分後に窓が API へ届く
+
+生成だけして登録しない場合は `pnpm setup:launchd --skip-bootstrap` です。Linux では bootstrap を自動で飛ばします。
+
+#### アクセシビリティを実行ファイル単位で再許可する
+
+macOS のアクセシビリティ許可は実行ファイル単位です。ターミナルや `pnpm collect` で一度許可していても、launchd が呼ぶ `node` には別の許可が要ります。
+
+1. `pnpm setup:launchd` を実行する
+2. システム設定 → プライバシーとセキュリティ → アクセシビリティ を開く
+3. 生成 plist の `ProgramArguments` 先頭と同じ `node`（例: `/opt/homebrew/bin/node` や volta のパス）を追加して許可する
+4. コレクタをやり直す: `launchctl kickstart -k gui/$(id -u)/com.shiftlog.collector`
+
+許可した `node` と plist のパスが違うと、窓タイトルは取れずログに `front window unavailable` が出ます。Node を入れ直したあとも、新しいバイナリに対して同じ手順を繰り返してください。
 
 ## Vercel
 
