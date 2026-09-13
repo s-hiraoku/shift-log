@@ -72,6 +72,7 @@ export async function seedDemoData(
           device: "desk",
           app: "Code",
           summary: "Opened ShiftLog monorepo",
+          meta: { file: "store.ts", project: "shift-log" },
         },
         {
           id: "d2",
@@ -105,6 +106,7 @@ export async function seedDemoData(
           device: "desk",
           app: "Terminal",
           summary: "Ran pnpm test",
+          meta: { cwd: "~/src/shift-log", branch: "main" },
         },
         {
           id: "u2",

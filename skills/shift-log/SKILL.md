@@ -71,7 +71,7 @@ Continue extracts keywords from `prompt`, searches title, body, apps, and `entit
 
 `since` / `until` are optional ISO 8601 datetimes. They filter on `front_matter.window_start` (inclusive) on continue, `/v1/timeline`, and `/v1/search`.
 
-Each memory `front_matter` typically has: `title`, `description`, `apps`, `device` (`desk` \| `mobile` \| `both`), `window_start`, `window_end`, `kind` (`ten_minute` \| `six_hour`), optional `skill_candidate`, and on ten-minute rows `apps_dwell`, `sites`, `top_app`, `entities`.
+Each memory `front_matter` typically has: `title`, `description`, `apps`, `device` (`desk` \| `mobile` \| `both`), `window_start`, `window_end`, `kind` (`ten_minute` \| `six_hour`), optional `skill_candidate`, and on ten-minute rows `apps_dwell`, `sites`, `projects`, `top_app`, `entities`.
 
 ### Reading `entities`
 
