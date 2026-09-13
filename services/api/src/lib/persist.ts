@@ -1,11 +1,63 @@
-import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
+import {
+  chmodSync,
+  existsSync,
+  mkdirSync,
+  readFileSync,
+  renameSync,
+  writeFileSync,
+} from "node:fs";
 import { createRequire } from "node:module";
+import os from "node:os";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
 
 const require = createRequire(import.meta.url);
 import type { MemoryRecord, PermissionsConfig } from "@shift-log/schema";
 import { PermissionsConfigSchema } from "@shift-log/schema";
 import type { StoredWindow } from "./store.js";
+
+const REPO_MARKER = "pnpm-workspace.yaml";
+
+export type DataDirRoots = {
+  home: string;
+  repoRoot: string;
+};
+
+export function findRepoRoot(startDir: string): string | null {
+  let dir = path.resolve(startDir);
+  for (;;) {
+    if (existsSync(path.join(dir, REPO_MARKER))) return dir;
+    const parent = path.dirname(dir);
+    if (parent === dir) return null;
+    dir = parent;
+  }
+}
+
+export function dataDirRoots(
+  startDir = path.dirname(fileURLToPath(import.meta.url)),
+  home = os.homedir(),
+  cwd = process.cwd(),
+): DataDirRoots {
+  const repoRoot = findRepoRoot(startDir) ?? findRepoRoot(cwd) ?? path.resolve(cwd);
+  return { home, repoRoot };
+}
+
+export function resolveDataDir(raw: string | undefined, roots: DataDirRoots): string {
+  const value = (raw ?? "").trim();
+  if (value === "") {
+    return path.join(roots.home, ".local", "share", "shiftlog");
+  }
+  if (value === "~") return roots.home;
+  if (value.startsWith(`~${path.sep}`)) {
+    return path.resolve(roots.home, value.slice(2));
+  }
+  if (path.isAbsolute(value)) return path.normalize(value);
+  return path.resolve(roots.repoRoot, value);
+}
+
+export function resolveShiftLogDataDir(raw = process.env.SHIFTLOG_DATA_DIR): string {
+  return resolveDataDir(raw, dataDirRoots());
+}
 
 export type TenantSnapshot = {
   permissions: PermissionsConfig;
@@ -18,6 +70,17 @@ export function isPersistEnabled(): boolean {
   if (process.env.SHIFTLOG_PERSIST === "0") return false;
   return Boolean(process.env.DATABASE_URL || process.env.SHIFTLOG_DATA_DIR);
 }
+
+export function ensureDefaultDataDir(): void {
+  if (process.env.VITEST) return;
+  if (process.env.SHIFTLOG_PERSIST === "0") return;
+  if (process.env.VERCEL) return;
+  if (process.env.DATABASE_URL) return;
+  if (process.env.SHIFTLOG_DATA_DIR) return;
+  process.env.SHIFTLOG_DATA_DIR = resolveShiftLogDataDir(undefined);
+}
+
+ensureDefaultDataDir();
 
 export function isPostgresUrl(url = process.env.DATABASE_URL ?? ""): boolean {
   return url.startsWith("postgres://") || url.startsWith("postgresql://");
@@ -55,6 +118,7 @@ class SqliteBackend {
     const { DatabaseSync } = require("node:sqlite") as typeof import("node:sqlite");
     mkdirSync(path.dirname(file), { recursive: true });
     this.db = new DatabaseSync(file);
+    chmodSync(file, 0o600);
     this.db.exec(DDL);
     this.migrateLegacyJson(file);
   }
@@ -179,7 +243,7 @@ function openBackend(): Backend | null {
     cached = new PostgresBackend(process.env.DATABASE_URL!);
     return cached;
   }
-  const dir = process.env.SHIFTLOG_DATA_DIR ?? path.resolve("data");
+  const dir = resolveShiftLogDataDir(process.env.SHIFTLOG_DATA_DIR);
   try {
     cached = new SqliteBackend(path.join(dir, "shiftlog.db"));
     return cached;

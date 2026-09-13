@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it } from "vitest";
 import type { WindowUpload } from "@shift-log/schema";
 import {
   isRawWindowExpired,
@@ -266,6 +266,13 @@ describe("MemoryStore deleteByScope overlap", () => {
 
 
 describe("MemoryStore persistence", () => {
+  afterEach(async () => {
+    process.env.VITEST = "1";
+    delete process.env.SHIFTLOG_DATA_DIR;
+    const { resetPersistCache } = await import("./persist.js");
+    resetPersistCache();
+  });
+
   it("round-trips permissions and memories when SHIFTLOG_DATA_DIR is set", async () => {
     const dir = await import("node:fs/promises").then(async (fs) => {
       const os = await import("node:os");
@@ -282,17 +289,19 @@ describe("MemoryStore persistence", () => {
       enabled: true,
       memories_enabled: true,
     });
+    const windowEnd = new Date();
+    const windowStart = new Date(windowEnd.getTime() - 10 * 60_000);
     a.putMemory({
       id: "persist-1",
-      created_at: "2026-08-30T01:10:00.000Z",
-      updated_at: "2026-08-30T01:10:00.000Z",
+      created_at: windowEnd.toISOString(),
+      updated_at: windowEnd.toISOString(),
       front_matter: {
         title: "persisted",
         description: "from disk",
         apps: ["Code"],
         device: "desk",
-        window_start: "2026-08-30T01:00:00.000Z",
-        window_end: "2026-08-30T01:10:00.000Z",
+        window_start: windowStart.toISOString(),
+        window_end: windowEnd.toISOString(),
         kind: "ten_minute",
         window_ids: ["w1"],
         skill_candidate: false,
@@ -302,8 +311,6 @@ describe("MemoryStore persistence", () => {
     const b = new MemoryStore();
     expect(b.permissions.enabled).toBe(true);
     expect(b.memories.has("persist-1")).toBe(true);
-    process.env.VITEST = "1";
-    delete process.env.SHIFTLOG_DATA_DIR;
   });
 });
 
