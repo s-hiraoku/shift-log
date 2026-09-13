@@ -79,6 +79,8 @@ npm exec --package="$(node -p "require('./package.json').packageManager")" -- pn
 
 運用手順（常駐・キーチェーン・Cron・署名）: [`docs/ops.md`](docs/ops.md)。macOS の常駐は `pnpm setup:launchd`（`node` のフルパスと `dist/*.js`。手で `YOU` を書き換えない）。
 
+収集の質を上げるには: [ウィンドウタイトルに作業内容を出す](docs/window-titles.md)
+
 ### まだスタブのもの
 
 - スマホネイティブ収集（対象外）
