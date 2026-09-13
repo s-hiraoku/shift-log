@@ -99,7 +99,7 @@ Stable handles observed in `apps/web` (Japanese UI, `lang=ja`):
 | Settings save | button `保存` → status `保存しました` |
 | Settings seed | button `デモデータを投入` → `デモ投入完了: windows=N, memories=N` |
 | History delete | danger buttons `直近十分`, `一時間`, `一日`, `全部` → `削除完了: windows=N, memories=N` |
-| Allowlist | labels `アプリモード`, `除外アプリ（1行1件）`, `許可のみアプリ（include_only 時）`, `サイトモード`, `除外サイト`, `許可のみサイト`; button `保存` → `許可リストを保存しました` |
+| Allowlist | labels `アプリモード`, `除外アプリ（1行1件）`, `許可のみアプリ（include_only 時）`, `タイトル非記録アプリ（1行1件）`, `サイトモード`, `除外サイト`, `許可のみサイト`; button `保存` → `許可リストを保存しました` |
 | Timeline search | `input[placeholder="検索（タイトル・本文・アプリ）"]` (no accessible name) + button `検索` (Enter also submits) |
 | Timeline empty | `まだ記憶がありません。収集を有効化して窓をアップロードしてください。` |
 | Memory row | link whose text is `front_matter.title` (demo titles like `Code / Chrome — 10分サマリ`) |
