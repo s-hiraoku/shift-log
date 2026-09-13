@@ -49,7 +49,7 @@ corepack enable
 cp .env.example .env
 pnpm install
 pnpm --filter @shift-log/schema build
-pnpm dev:api          # http://localhost:8787 （data/ に永続化）
+pnpm dev:api          # http://localhost:8787 （~/.local/share/shiftlog に永続化）
 pnpm dev:web          # http://localhost:3000
 ```
 
@@ -72,7 +72,7 @@ npm exec --package="$(node -p "require('./package.json').packageManager")" -- pn
 - 設定で収集 ON/OFF・一時停止・履歴削除
 - 十分窓のアップロード → Markdown 記憶化 → タイムライン/検索
 - デスクトップ実収集（macOS: System Events / Linux: xdotool または xprop）。`--demo` は擬似イベント
-- SQLite 永続化（`SHIFTLOG_DATA_DIR/shiftlog.db`）または Postgres（`DATABASE_URL`）
+- SQLite 永続化（既定 `~/.local/share/shiftlog/shiftlog.db`）または Postgres（`DATABASE_URL`）
 - ユーザ単位のデータ分離（`SHIFTLOG_API_TOKENS`）。トークン未設定時は起動拒否（fail-closed）
 - レート制限・アップロード上限・監査ログ・48h purge（自前ホスト + Vercel Cron）
 - エージェント向け `context_only`（Computer Use なし）
@@ -101,7 +101,7 @@ pnpm --filter @shift-log/web dev          # http://localhost:3000
 SHIFTLOG_API_TOKEN=dev-token          # 必須。未設定なら起動しない
 # SHIFTLOG_API_TOKENS=alice:s1,bob:s2  # 任意。ユーザ単位でデータ分離
 SHIFTLOG_API_ORIGIN=http://localhost:8787
-SHIFTLOG_DATA_DIR=./data               # SQLite: data/shiftlog.db
+# SHIFTLOG_DATA_DIR=./data             # 未設定時は ~/.local/share/shiftlog。相対パスはリポジトリルート基準
 # DATABASE_URL=postgresql://...        # Vercel では必須（Postgres）
 # CRON_SECRET=...                      # Vercel 毎時 purge
 # SHIFTLOG_LLM_API_KEY=...             # 任意。十分サマリを LLM 化
@@ -138,6 +138,8 @@ Web UI は `/api/*` の Route Handler 経由で API を呼び、Bearer トーク
 - Web: `apps/web` を Root Directory に設定
 - API: `services/api` を別プロジェクトにし、`api/index.ts` をエントリに使用
 - またはルートの `vercel.json` で API ルートを紐付け
+
+Vercel + Postgres（Neon など）では、ウィンドウタイトルに含まれる業務情報（Slack のチャンネル名、社内ツールの案件名など）が社外のデータベースに保存されます。社内情報を扱う場合はセルフホスト（SQLite は `~/.local/share/shiftlog/shiftlog.db`、ファイル権限 0600）にしてください。タイトルを落としてアプリ名だけ残す `app_only`（#41）は未実装です。
 
 ## テスト
 

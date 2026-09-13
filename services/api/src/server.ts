@@ -1,13 +1,13 @@
-import path from "node:path";
 import { serve } from "@hono/node-server";
 import { createApp } from "./app.js";
 import { assertAuthConfigured } from "./middleware/auth.js";
+import { resolveShiftLogDataDir } from "./lib/persist.js";
 import { purgeAllTenants } from "./lib/store.js";
 
 assertAuthConfigured();
 
-if (!process.env.SHIFTLOG_DATA_DIR && !process.env.DATABASE_URL) {
-  process.env.SHIFTLOG_DATA_DIR = path.resolve("data");
+if (!process.env.DATABASE_URL) {
+  process.env.SHIFTLOG_DATA_DIR = resolveShiftLogDataDir(process.env.SHIFTLOG_DATA_DIR);
 }
 
 const app = createApp();

@@ -35,7 +35,7 @@ pnpm --filter @shift-log/desktop collect
 | `SHIFTLOG_API_TOKEN` | はい | Bearer。未設定なら API は起動しない |
 | `SHIFTLOG_API_TOKENS` | 任意 | `user:token,...` でテナント分離 |
 | `SHIFTLOG_ALLOW_INSECURE_DEV` | 開発のみ | `1` のとき暗黙 `dev-token` |
-| `SHIFTLOG_DATA_DIR` | 自前ホスト | SQLite `shiftlog.db` |
+| `SHIFTLOG_DATA_DIR` | 自前ホスト | SQLite。未設定時は `~/.local/share/shiftlog`。相対パスはリポジトリルート基準 |
 | `DATABASE_URL` | Vercel では必須 | `postgres://` / `postgresql://` |
 | `CRON_SECRET` | Vercel Cron | `/internal/cron/purge` の共有秘密 |
 | `SHIFTLOG_CORS_ORIGINS` | 任意 | カンマ区切り。未設定は `*` |
@@ -59,7 +59,7 @@ pnpm --filter @shift-log/desktop collect
 - 監査は stdout の 1 行 JSON（トークンと生イベントは出さない）
 - `/v1/*` はテナント単位のレート制限。過大 POST は 413
 
-SQLite バックアップ: `SHIFTLOG_DATA_DIR/shiftlog.db` を止めてコピーするか、`sqlite3 ... ".backup backup.db"`。
+SQLite バックアップ: `SHIFTLOG_DATA_DIR/shiftlog.db`（既定 `~/.local/share/shiftlog/shiftlog.db`）を止めてコピーするか、`sqlite3 ... ".backup backup.db"`。新規作成時のファイル権限は `0600`。以前の cwd 相対 `./data`（`pnpm dev:api` では `services/api/data/shiftlog.db` になりがちだった）を使っていた場合は、そのファイルを新しい場所へ移す。
 
 ## ログイン・常駐
 
@@ -94,6 +94,8 @@ launchctl load ~/Library/LaunchAgents/com.shiftlog.collector.plist
 - API: Root Directory `services/api`（`api/index.ts`）。`vercel.json` の Cron が毎時 purge
 - API 環境変数: `SHIFTLOG_API_TOKEN`（または `SHIFTLOG_API_TOKENS`）、`DATABASE_URL`、`CRON_SECRET`、必要なら `SHIFTLOG_LLM_*` / `SHIFTLOG_CORS_ORIGINS`
 - SQLite は使わない（サーバレスでディスクが消える）
+
+Vercel + Postgres では、ウィンドウタイトルに含まれる業務情報（Slack のチャンネル名、社内ツールの案件名など）が Neon など社外の DB に保存されます。社内情報を扱う場合はセルフホストにするか、アプリ名だけを残してタイトルを落とす `app_only`（#41、未実装）を検討してください。
 
 ## 署名・公証（任意）
 
