@@ -95,6 +95,28 @@ describe("DesktopCollector", () => {
     expect(window.events.some((e) => e.type === "typing_presence")).toBe(false);
   });
 
+  it("copies interpreted editor and terminal title meta onto events", () => {
+    const collector = new DesktopCollector(
+      PermissionsConfigSchema.parse({
+        enabled: true,
+        memories_enabled: true,
+      }),
+      "http://localhost:8787",
+      "dev-token",
+    );
+    emitOsTick(collector, { app: "Cursor", title: "shift-log — collector.ts" }, null);
+    emitOsTick(
+      collector,
+      { app: "ghostty", title: "~/src/shift-log (main)" },
+      { app: "Cursor", title: "shift-log — collector.ts" },
+    );
+    const window = collector.drainWindow(new Date());
+    const cursor = window.events.find((e) => e.app === "Cursor");
+    const ghostty = window.events.find((e) => e.app === "ghostty" && e.type === "front_window_summary");
+    expect(cursor?.meta).toEqual({ project: "shift-log", file: "collector.ts" });
+    expect(ghostty?.meta).toEqual({ cwd: "~/src/shift-log", branch: "main" });
+  });
+
   it("keeps buffered events when upload rejects", async () => {
     const collector = new DesktopCollector(
       PermissionsConfigSchema.parse({
