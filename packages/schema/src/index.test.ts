@@ -2,8 +2,10 @@ import { describe, expect, it } from "vitest";
 import {
   canCollect,
   isSourceAllowed,
+  omitTitleFields,
   PermissionsConfigSchema,
   serializeMemoryMarkdown,
+  titlePolicyFor,
   WindowUploadSchema,
   type MemoryRecord,
 } from "./index.js";
@@ -38,6 +40,40 @@ describe("permissions", () => {
     });
     expect(isSourceAllowed(include, "apps", "Code")).toBe(true);
     expect(isSourceAllowed(include, "apps", "Slack")).toBe(false);
+  });
+
+  it("defaults title_policy to full and records app_only by name", () => {
+    const config = PermissionsConfigSchema.parse({
+      title_policy: { Slack: "app_only" },
+    });
+    expect(config.title_policy).toEqual({ Slack: "app_only" });
+    expect(titlePolicyFor(config, "Slack")).toBe("app_only");
+    expect(titlePolicyFor(config, "slack")).toBe("app_only");
+    expect(titlePolicyFor(config, "Code")).toBe("full");
+    expect(titlePolicyFor(PermissionsConfigSchema.parse({}), "Slack")).toBe("full");
+  });
+
+  it("rejects title_policy values other than full or app_only", () => {
+    expect(() =>
+      PermissionsConfigSchema.parse({ title_policy: { Slack: "exclude" } }),
+    ).toThrow();
+  });
+
+  it("omits summary, site, and meta while keeping app", () => {
+    expect(
+      omitTitleFields({
+        id: "e1",
+        type: "front_window_summary",
+        app: "Slack",
+        site: "app.slack.com",
+        summary: "team_frontend-pr-n10n（チャンネル）",
+        meta: { channel: "team_frontend-pr-n10n" },
+      }),
+    ).toEqual({
+      id: "e1",
+      type: "front_window_summary",
+      app: "Slack",
+    });
   });
 
   it("forbids screenshots and full keylog in capture policy", () => {

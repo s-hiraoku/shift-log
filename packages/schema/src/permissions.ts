@@ -9,6 +9,9 @@ import { z } from "zod";
 export const PermissionModeSchema = z.enum(["exclude_listed", "include_only"]);
 export type PermissionMode = z.infer<typeof PermissionModeSchema>;
 
+export const TitlePolicySchema = z.enum(["full", "app_only"]);
+export type TitlePolicy = z.infer<typeof TitlePolicySchema>;
+
 const SourceRulesSchema = z
   .object({
     mode: PermissionModeSchema.default("exclude_listed"),
@@ -45,6 +48,8 @@ export const PermissionsConfigSchema = z.object({
   paused: z.boolean().default(false),
   apps: SourceRulesSchema,
   sites: SourceRulesSchema,
+  /** Per-app title recording. A missing key is full (app + title). */
+  title_policy: z.record(z.string(), TitlePolicySchema).default({}),
   /** Always true — private browsing is never collected. */
   private_browsing_excluded: z.literal(true).default(true),
   /** Never capture screenshots, screen recording, mic, or system audio. */
@@ -68,4 +73,20 @@ export function isSourceAllowed(
     return rules.include_only.some((x) => x.toLowerCase() === normalized);
   }
   return !rules.exclude.some((x) => x.toLowerCase() === normalized);
+}
+
+export function titlePolicyFor(config: PermissionsConfig, name: string): TitlePolicy {
+  const normalized = name.trim().toLowerCase();
+  if (!normalized) return "full";
+  for (const [key, policy] of Object.entries(config.title_policy)) {
+    if (key.trim().toLowerCase() === normalized) return policy;
+  }
+  return "full";
+}
+
+export function omitTitleFields<
+  E extends { summary?: unknown; site?: unknown; meta?: unknown },
+>(event: E): Omit<E, "summary" | "site" | "meta"> {
+  const { summary: _summary, site: _site, meta: _meta, ...rest } = event;
+  return rest;
 }
