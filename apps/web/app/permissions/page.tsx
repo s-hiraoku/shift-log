@@ -15,6 +15,7 @@ export default function PermissionsPage() {
   const [config, setConfig] = useState<PermissionsConfig | null>(null);
   const [appsExclude, setAppsExclude] = useState("");
   const [appsInclude, setAppsInclude] = useState("");
+  const [appsTitleOnly, setAppsTitleOnly] = useState("");
   const [sitesExclude, setSitesExclude] = useState("");
   const [sitesInclude, setSitesInclude] = useState("");
   const [status, setStatus] = useState("");
@@ -24,6 +25,12 @@ export default function PermissionsPage() {
       setConfig(c);
       setAppsExclude(c.apps.exclude.join("\n"));
       setAppsInclude(c.apps.include_only.join("\n"));
+      setAppsTitleOnly(
+        Object.entries(c.title_policy)
+          .filter(([, policy]) => policy === "app_only")
+          .map(([name]) => name)
+          .join("\n"),
+      );
       setSitesExclude(c.sites.exclude.join("\n"));
       setSitesInclude(c.sites.include_only.join("\n"));
     });
@@ -31,6 +38,10 @@ export default function PermissionsPage() {
 
   async function save() {
     if (!config) return;
+    const title_policy: PermissionsConfig["title_policy"] = {};
+    for (const name of splitLines(appsTitleOnly)) {
+      title_policy[name] = "app_only";
+    }
     const next: PermissionsConfig = {
       ...config,
       apps: {
@@ -43,6 +54,7 @@ export default function PermissionsPage() {
         exclude: splitLines(sitesExclude),
         include_only: splitLines(sitesInclude),
       },
+      title_policy,
     };
     const saved = await apiFetch<PermissionsConfig>("/v1/permissions", {
       method: "PUT",
@@ -59,7 +71,7 @@ export default function PermissionsPage() {
       <section className="card stack">
         <h1>許可リスト</h1>
         <p className="muted">
-          アプリ単位・サイト単位。除外リストと許可リストの両方。プライベートブラウズは永久除外。
+          アプリ単位・サイト単位。除外、タイトル非記録、通常記録の3段階。プライベートブラウズは永久除外。
         </p>
 
         <label>
@@ -89,6 +101,17 @@ export default function PermissionsPage() {
           許可のみアプリ（include_only 時）
           <textarea rows={4} value={appsInclude} onChange={(e) => setAppsInclude(e.target.value)} />
         </label>
+        <label>
+          タイトル非記録アプリ（1行1件）
+          <textarea
+            rows={4}
+            value={appsTitleOnly}
+            onChange={(e) => setAppsTitleOnly(e.target.value)}
+          />
+        </label>
+        <p className="muted">
+          タイトル非記録のアプリは滞在時間だけ残します。チャンネル名や DM 相手はサーバに送りません。
+        </p>
 
         <label>
           サイトモード

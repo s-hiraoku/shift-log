@@ -9,6 +9,7 @@ The allowlist page sets per-app and per-site exclude/include lists. Private brow
 - `allowlist-site-mode` switches sites between `Exclude listed` and `Include only`.
 - `allowlist-site-exclude` persists hostnames in `除外サイト`.
 - `allowlist-save` shows `許可リストを保存しました` and reloads the same values.
+- `allowlist-app-title-only` persists one app name per line in `タイトル非記録アプリ（1行1件）` as `title_policy[app] = "app_only"`.
 
 ## How to get to it (user POV)
 

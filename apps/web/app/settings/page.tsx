@@ -10,6 +10,7 @@ const empty: PermissionsConfig = {
   paused: false,
   apps: { mode: "exclude_listed", exclude: [], include_only: [] },
   sites: { mode: "exclude_listed", exclude: [], include_only: [] },
+  title_policy: {},
   private_browsing_excluded: true,
   capture_policy: {
     screenshots: false,
