@@ -119,4 +119,41 @@ describe("deterministicTenMinuteBody", () => {
       expect(line).toMatch(/\d{2}:\d{2}/);
     }
   });
+
+  it("keeps Slack dwell and uses the app name when titles were omitted", () => {
+    const upload: WindowUpload = {
+      metadata: {
+        window_id: "w-app-only",
+        window_start: "2026-09-13T01:00:00.000Z",
+        window_end: "2026-09-13T01:10:00.000Z",
+        devices: ["desk"],
+        dual_lane: false,
+        event_count: 2,
+        paused: false,
+        schema_version: "1",
+      },
+      events: [
+        {
+          id: "s1",
+          type: "app_switch",
+          ts: "2026-09-13T01:00:00.000Z",
+          device: "desk",
+          app: "Slack",
+        },
+        {
+          id: "s2",
+          type: "front_window_summary",
+          ts: "2026-09-13T01:00:15.000Z",
+          device: "desk",
+          app: "Slack",
+        },
+      ],
+    };
+    const out = deterministicTenMinuteBody(upload);
+    expect(out.aggregate.apps_dwell).toEqual({ Slack: 600 });
+    expect(out.body).toContain("- 01:00 Slack 600秒");
+    expect(out.body).toContain("- 01:00-01:10 Slack — Slack");
+    expect(out.body).not.toContain("チャンネル");
+    expect(out.aggregate.sites).toEqual([]);
+  });
 });

@@ -23,6 +23,35 @@ describe("MobileCollector", () => {
     expect(window.events).toHaveLength(0);
   });
 
+  it("records Slack without title when title_policy is app_only", () => {
+    const collector = new MobileCollector(
+      PermissionsConfigSchema.parse({
+        enabled: true,
+        memories_enabled: true,
+        title_policy: { Slack: "app_only" },
+      }),
+      "http://localhost:8787",
+      "dev-token",
+    );
+    collector.observe({
+      id: "slack-channel",
+      type: "front_window_summary",
+      ts: "2026-09-13T01:00:00.000Z",
+      app: "Slack",
+      summary: "team_frontend-pr-n10n（チャンネル）",
+    });
+    const window = collector.drainWindow(new Date("2026-09-13T01:00:00.000Z"));
+    expect(window.events).toEqual([
+      {
+        id: "slack-channel",
+        type: "front_window_summary",
+        ts: "2026-09-13T01:00:00.000Z",
+        device: "mobile",
+        app: "Slack",
+      },
+    ]);
+  });
+
   it("merges desk and mobile into dual lanes", () => {
     const perms = PermissionsConfigSchema.parse({
       enabled: true,
