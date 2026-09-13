@@ -68,9 +68,19 @@ export type TenantSnapshot = {
 export function isPersistEnabled(): boolean {
   if (process.env.VITEST) return false;
   if (process.env.SHIFTLOG_PERSIST === "0") return false;
-  if (process.env.DATABASE_URL || process.env.SHIFTLOG_DATA_DIR) return true;
-  return !process.env.VERCEL;
+  return Boolean(process.env.DATABASE_URL || process.env.SHIFTLOG_DATA_DIR);
 }
+
+export function ensureDefaultDataDir(): void {
+  if (process.env.VITEST) return;
+  if (process.env.SHIFTLOG_PERSIST === "0") return;
+  if (process.env.VERCEL) return;
+  if (process.env.DATABASE_URL) return;
+  if (process.env.SHIFTLOG_DATA_DIR) return;
+  process.env.SHIFTLOG_DATA_DIR = resolveShiftLogDataDir(undefined);
+}
+
+ensureDefaultDataDir();
 
 export function isPostgresUrl(url = process.env.DATABASE_URL ?? ""): boolean {
   return url.startsWith("postgres://") || url.startsWith("postgresql://");

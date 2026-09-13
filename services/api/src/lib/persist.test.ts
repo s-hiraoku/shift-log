@@ -1,17 +1,53 @@
 import { afterEach, describe, expect, it } from "vitest";
 import { mkdtempSync, mkdirSync, rmSync, statSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
+import { homedir, tmpdir } from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { PermissionsConfigSchema } from "@shift-log/schema";
 import {
+  ensureDefaultDataDir,
   findRepoRoot,
-  isPersistEnabled,
   resetPersistCache,
   resolveDataDir,
   resolveShiftLogDataDir,
 } from "./persist.js";
 import { MemoryStore } from "./store.js";
+
+describe("ensureDefaultDataDir", () => {
+  const keys = ["VITEST", "SHIFTLOG_PERSIST", "DATABASE_URL", "SHIFTLOG_DATA_DIR", "VERCEL"] as const;
+  const saved: Partial<Record<(typeof keys)[number], string | undefined>> = {};
+
+  afterEach(() => {
+    for (const key of keys) {
+      const value = saved[key];
+      if (value === undefined) delete process.env[key];
+      else process.env[key] = value;
+    }
+    process.env.VITEST = "true";
+  });
+
+  function clearPersistEnv(): void {
+    for (const key of keys) {
+      saved[key] = process.env[key];
+      delete process.env[key];
+    }
+  }
+
+  it("sets ~/.local/share/shiftlog when self-hosted env is empty", () => {
+    clearPersistEnv();
+    ensureDefaultDataDir();
+    expect(process.env.SHIFTLOG_DATA_DIR).toBe(
+      path.join(homedir(), ".local", "share", "shiftlog"),
+    );
+  });
+
+  it("does not set a data dir on Vercel", () => {
+    clearPersistEnv();
+    process.env.VERCEL = "1";
+    ensureDefaultDataDir();
+    expect(process.env.SHIFTLOG_DATA_DIR).toBeUndefined();
+  });
+});
 
 describe("resolveDataDir", () => {
   const roots = { home: "/home/ada", repoRoot: "/src/shift-log" };
@@ -69,45 +105,6 @@ describe("findRepoRoot", () => {
     }
   });
 });
-
-describe("isPersistEnabled implicit sqlite", () => {
-  const keys = [
-    "VITEST",
-    "SHIFTLOG_PERSIST",
-    "DATABASE_URL",
-    "SHIFTLOG_DATA_DIR",
-    "VERCEL",
-  ] as const;
-  const saved: Record<string, string | undefined> = {};
-
-  afterEach(() => {
-    for (const key of keys) {
-      const value = saved[key];
-      if (value === undefined) delete process.env[key];
-      else process.env[key] = value;
-    }
-    process.env.VITEST = "true";
-    process.env.SHIFTLOG_PERSIST = "0";
-  });
-
-  it("enables self-hosted sqlite when the data dir is unset", () => {
-    for (const key of keys) {
-      saved[key] = process.env[key];
-      delete process.env[key];
-    }
-    expect(isPersistEnabled()).toBe(true);
-  });
-
-  it("stays off on Vercel without DATABASE_URL", () => {
-    for (const key of keys) {
-      saved[key] = process.env[key];
-      delete process.env[key];
-    }
-    process.env.VERCEL = "1";
-    expect(isPersistEnabled()).toBe(false);
-  });
-});
-
 
 describe("sqlite persist", () => {
   const dirs: string[] = [];
