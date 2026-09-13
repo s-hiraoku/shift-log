@@ -35,7 +35,7 @@ pnpm --filter @shift-log/desktop collect
 | `SHIFTLOG_API_TOKEN` | はい | Bearer。未設定なら API は起動しない |
 | `SHIFTLOG_API_TOKENS` | 任意 | `user:token,...` でテナント分離 |
 | `SHIFTLOG_ALLOW_INSECURE_DEV` | 開発のみ | `1` のとき暗黙 `dev-token` |
-| `SHIFTLOG_DATA_DIR` | 自前ホスト | SQLite `shiftlog.db` |
+| `SHIFTLOG_DATA_DIR` | 自前ホスト | SQLite。未設定時は `~/.local/share/shiftlog`。相対パスはリポジトリルート基準 |
 | `DATABASE_URL` | Vercel では必須 | `postgres://` / `postgresql://` |
 | `CRON_SECRET` | Vercel Cron | `/internal/cron/purge` の共有秘密 |
 | `SHIFTLOG_CORS_ORIGINS` | 任意 | カンマ区切り。未設定は `*` |
@@ -59,7 +59,7 @@ pnpm --filter @shift-log/desktop collect
 - 監査は stdout の 1 行 JSON（トークンと生イベントは出さない）
 - `/v1/*` はテナント単位のレート制限。過大 POST は 413
 
-SQLite バックアップ: `SHIFTLOG_DATA_DIR/shiftlog.db` を止めてコピーするか、`sqlite3 ... ".backup backup.db"`。
+SQLite バックアップ: `SHIFTLOG_DATA_DIR/shiftlog.db`（既定 `~/.local/share/shiftlog/shiftlog.db`）を止めてコピーするか、`sqlite3 ... ".backup backup.db"`。新規作成時のファイル権限は `0600`。以前の cwd 相対 `./data`（`pnpm dev:api` では `services/api/data/shiftlog.db` になりがちだった）を使っていた場合は、そのファイルを新しい場所へ移す。
 
 ## ログイン・常駐
 
@@ -80,13 +80,38 @@ Linux 収集には `xdotool`（なければ `xprop`）が必要です。
 
 ### macOS（launchd）
 
+`packaging/macos/*.plist` はそのままでは動きません。`pnpm` は launchd の PATH に無く、API の `start` は `node dist/server.js` なので先に `pnpm build` が必要です。次のコマンドが両方をやります。
+
 ```bash
-# WorkingDirectory / ログパスの YOU を置き換える
-cp packaging/macos/com.shiftlog.collector.plist ~/Library/LaunchAgents/
-launchctl load ~/Library/LaunchAgents/com.shiftlog.collector.plist
+pnpm install
+cp .env.example .env
+# SHIFTLOG_API_TOKEN を推測されにくい値に変更する
+pnpm --filter @shift-log/desktop credentials set "$SHIFTLOG_API_TOKEN"
+pnpm setup:launchd
 ```
 
-初回はシステム設定 → プライバシーとセキュリティ → アクセシビリティで Node / ターミナルを許可。
+`pnpm setup:launchd` は `pnpm build` のあと、このマシンの `node` フルパスとリポジトリパスで plist を生成し、`~/Library/LaunchAgents` へ書いて `launchctl bootstrap` します。再実行しても同じ状態に収束します。
+
+コレクタのトークンはキーチェーン（または `~/.config/shiftlog/credentials.json`）から読むので、コレクタ側 plist には書きません。API のトークンはリポジトリ直下の `.env` を `scripts/load-root-env.mjs` 経由で読みます。plist に `SHIFTLOG_API_TOKEN` は入りません。
+
+確認:
+
+- `~/Library/Logs/shiftlog-api.log` に `ShiftLog API listening on http://localhost:8787`
+- `~/Library/Logs/shiftlog-collector.log` に `[desktop] collector ready`
+- 収集を設定で有効化すると、約 10 分後に窓が API へ届く
+
+生成だけして登録しない場合は `pnpm setup:launchd --skip-bootstrap` です。Linux では bootstrap を自動で飛ばします。
+
+#### アクセシビリティを実行ファイル単位で再許可する
+
+macOS のアクセシビリティ許可は実行ファイル単位です。ターミナルや `pnpm collect` で一度許可していても、launchd が呼ぶ `node` には別の許可が要ります。
+
+1. `pnpm setup:launchd` を実行する
+2. システム設定 → プライバシーとセキュリティ → アクセシビリティ を開く
+3. 生成 plist の `ProgramArguments` 先頭と同じ `node`（例: `/opt/homebrew/bin/node` や volta のパス）を追加して許可する
+4. コレクタをやり直す: `launchctl kickstart -k gui/$(id -u)/com.shiftlog.collector`
+
+許可した `node` と plist のパスが違うと、窓タイトルは取れずログに `front window unavailable` が出ます。Node を入れ直したあとも、新しいバイナリに対して同じ手順を繰り返してください。
 
 ## Vercel
 
@@ -94,6 +119,8 @@ launchctl load ~/Library/LaunchAgents/com.shiftlog.collector.plist
 - API: Root Directory `services/api`（`api/index.ts`）。`vercel.json` の Cron が毎時 purge
 - API 環境変数: `SHIFTLOG_API_TOKEN`（または `SHIFTLOG_API_TOKENS`）、`DATABASE_URL`、`CRON_SECRET`、必要なら `SHIFTLOG_LLM_*` / `SHIFTLOG_CORS_ORIGINS`
 - SQLite は使わない（サーバレスでディスクが消える）
+
+Vercel + Postgres では、ウィンドウタイトルに含まれる業務情報（Slack のチャンネル名、社内ツールの案件名など）が Neon など社外の DB に保存されます。社内情報を扱う場合はセルフホストにするか、アプリ名だけを残してタイトルを落とす `app_only`（#41、未実装）を検討してください。
 
 ## 署名・公証（任意）
 

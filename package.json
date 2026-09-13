@@ -13,7 +13,8 @@
     "dev:api": "pnpm --filter @shift-log/api dev",
     "dev:web": "pnpm --filter @shift-log/web dev",
     "demo:desktop": "pnpm --filter @shift-log/desktop demo",
-    "seed": "curl -s -X POST -H \"Authorization: Bearer ${SHIFTLOG_API_TOKEN:-dev-token}\" -H \"Content-Type: application/json\" -d '{\"enable\":true}' \"${SHIFTLOG_API_ORIGIN:-http://localhost:8787}/v1/demo/seed\""
+    "seed": "curl -s -X POST -H \"Authorization: Bearer ${SHIFTLOG_API_TOKEN:-dev-token}\" -H \"Content-Type: application/json\" -d '{\"enable\":true}' \"${SHIFTLOG_API_ORIGIN:-http://localhost:8787}/v1/demo/seed\"",
+    "setup:launchd": "node scripts/setup-launchd.mjs"
   },
   "engines": {
     "node": ">=20",
