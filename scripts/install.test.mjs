@@ -77,25 +77,61 @@ function dataDir(home) {
 }
 
 describe("install.sh", () => {
-  it("clones into ~/.local/share/shiftlog/src, installs, builds schema, and runs setup:launchd", () => {
+  it("clones into ~/.local/share/shiftlog/src, installs, and runs setup:launchd", () => {
     const upstream = makeUpstream();
     const { home, stub, log } = makeHome();
     const result = runInstall(home, stub, log, [], { SHIFTLOG_REPO_URL: upstream });
     assert.equal(result.status, 0, result.stderr || result.stdout);
     assert.match(result.stdout, /shiftlog: source /);
     assert.equal(readFileSync(join(srcDir(home), ".git", "HEAD"), "utf8").includes("ref:"), true);
-    assert.equal(
-      readFileSync(join(srcDir(home), ".env"), "utf8"),
-      "SHIFTLOG_API_TOKEN=dev-token\n",
-    );
     assert.equal(statSync(join(srcDir(home), ".env")).mode & 0o777, 0o600);
     const stubLog = readFileSync(log, "utf8").trim().split("\n");
     assert.deepEqual(stubLog, [
       `corepack ${srcDir(home)} enable`,
       `pnpm ${srcDir(home)} install`,
       `pnpm ${srcDir(home)} --filter @shift-log/schema build`,
+      `pnpm ${srcDir(home)} --filter @shift-log/desktop credentials set`,
       `pnpm ${srcDir(home)} setup:launchd`,
     ]);
+  });
+
+  it("replaces the public placeholder token with a per-install random one", () => {
+    const upstream = makeUpstream();
+    const first = makeHome();
+    const second = makeHome();
+    for (const home of [first, second]) {
+      const result = runInstall(home.home, home.stub, home.log, [], {
+        SHIFTLOG_REPO_URL: upstream,
+      });
+      assert.equal(result.status, 0, result.stderr || result.stdout);
+    }
+    const tokenOf = (home) => {
+      const env = readFileSync(join(srcDir(home), ".env"), "utf8");
+      const match = env.match(/^SHIFTLOG_API_TOKEN=(.+)$/m);
+      assert.ok(match, `no SHIFTLOG_API_TOKEN in ${env}`);
+      return match[1];
+    };
+    const a = tokenOf(first.home);
+    const b = tokenOf(second.home);
+    assert.match(a, /^[0-9a-f]{48}$/);
+    assert.notEqual(a, "dev-token");
+    assert.notEqual(a, b);
+  });
+
+  it("warns instead of rewriting when an existing .env still holds dev-token", () => {
+    const upstream = makeUpstream();
+    const { home, stub, log } = makeHome();
+    const first = runInstall(home, stub, log, ["install"], { SHIFTLOG_REPO_URL: upstream });
+    assert.equal(first.status, 0, first.stderr || first.stdout);
+
+    writeFileSync(join(srcDir(home), ".env"), "SHIFTLOG_API_TOKEN=dev-token\n");
+    const second = runInstall(home, stub, log, ["update"], { SHIFTLOG_REPO_URL: upstream });
+    assert.equal(second.status, 0, second.stderr || second.stdout);
+    assert.match(second.stderr, /dev-token/);
+    assert.equal(
+      readFileSync(join(srcDir(home), ".env"), "utf8"),
+      "SHIFTLOG_API_TOKEN=dev-token\n",
+    );
   });
   it("install on an existing checkout fetches the default branch", () => {
     const upstream = makeUpstream();
@@ -139,6 +175,7 @@ describe("install.sh", () => {
     const stubLog = readFileSync(log, "utf8");
     assert.match(stubLog, /^pnpm .* install$/m);
     assert.match(stubLog, /--filter @shift-log\/schema build/m);
+    assert.match(stubLog, /--filter @shift-log\/desktop credentials set/m);
     assert.match(stubLog, /setup:launchd/m);
   });
 

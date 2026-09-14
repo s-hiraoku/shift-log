@@ -49,14 +49,29 @@ ensure_src() {
   git clone "$REPO_URL" "$SRC_DIR"
 }
 
+generate_token() {
+  node -e 'process.stdout.write(require("node:crypto").randomBytes(24).toString("hex"))'
+}
+
 ensure_env() {
   if [[ -f "$SRC_DIR/.env" ]]; then
+    if grep -q '^SHIFTLOG_API_TOKEN=dev-token$' "$SRC_DIR/.env"; then
+      echo "shiftlog: warning: $SRC_DIR/.env still uses the public placeholder token 'dev-token'; replace SHIFTLOG_API_TOKEN" >&2
+    fi
     return
   fi
-  if [[ -f "$SRC_DIR/.env.example" ]]; then
-    cp "$SRC_DIR/.env.example" "$SRC_DIR/.env"
-    chmod 600 "$SRC_DIR/.env"
+  if [[ ! -f "$SRC_DIR/.env.example" ]]; then
+    return
   fi
+  # .env.example の dev-token は公開値なので、そのまま配ると全インストールが同じ鍵になる
+  local token
+  token="$(generate_token)"
+  (umask 077 && sed "s|^SHIFTLOG_API_TOKEN=.*$|SHIFTLOG_API_TOKEN=$token|" "$SRC_DIR/.env.example" > "$SRC_DIR/.env")
+}
+
+store_credentials() {
+  # トークンは引数ではなく .env 経由で渡す（プロセス一覧と shell 履歴に出さない）
+  pnpm --filter @shift-log/desktop credentials set
 }
 
 bootstrap() {
@@ -68,6 +83,7 @@ bootstrap() {
   pnpm install
   pnpm --filter @shift-log/schema build
   ensure_env
+  store_credentials
   pnpm setup:launchd
 }
 
