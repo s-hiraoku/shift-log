@@ -102,6 +102,7 @@ describe("memory markdown", () => {
         skill_candidate: false,
         apps_dwell: { Code: 420, Terminal: 180 },
         sites: ["github.com"],
+        projects: ["shift-log"],
         top_app: "Code",
         entities: [{ kind: "github_repo", value: "s-hiraoku/shift-log" }],
       },
@@ -111,6 +112,7 @@ describe("memory markdown", () => {
     expect(md).toContain("title:");
     expect(md).toContain("window_start:");
     expect(md).toContain("apps_dwell:");
+    expect(md).toContain("projects: [\"shift-log\"]");
     expect(md).toContain("top_app: \"Code\"");
     expect(md).toContain("アプリ別滞在時間");
     expect(md).toContain("entities:");
