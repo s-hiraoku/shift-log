@@ -3,9 +3,9 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "next dev --port 3000",
+    "dev": "node --import ../../scripts/load-root-env.mjs ./node_modules/next/dist/bin/next dev --port 3000",
     "build": "next build",
-    "start": "next start",
+    "start": "node --import ../../scripts/load-root-env.mjs ./node_modules/next/dist/bin/next start",
     "test": "vitest run",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "lint": "next lint || tsc -p tsconfig.json --noEmit"

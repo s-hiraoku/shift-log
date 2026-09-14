@@ -38,19 +38,29 @@ Cursor などではリポジトリの Skill を有効化するか、`skills/shif
 
 - **十分窓**: `events.jsonl` 相当のイベント配列 + `metadata.json`
 - **記憶 Markdown**: YAML フロントマターに `title`, `description`, `apps`, `device`, `window_start`, `window_end`
-- 十分サマリと、最大 36 本を束ねた六時間サマリ
+- 十分サマリと、UTC の 00/06/12/18 時で区切った六時間サマリ（同じ区間は同一 ID で上書き）
 - 同一十分窓に PC とスマホがいれば `desk` / `mobile` の二レーン
 
 
 ## MVP クイックスタート
 
 ```bash
+corepack enable
 cp .env.example .env
 pnpm install
 pnpm --filter @shift-log/schema build
-pnpm dev:api          # http://localhost:8787 （data/ に永続化）
+pnpm dev:api          # http://localhost:8787 （~/.local/share/shiftlog に永続化）
 pnpm dev:web          # http://localhost:3000
 ```
+
+Use the `packageManager` field in `package.json`. pnpm 9 installs without optional native bindings, then `pnpm test` fails. `corepack enable` makes `pnpm` honor that field. If corepack is unavailable:
+
+```bash
+npm exec --package="$(node -p "require('./package.json').packageManager")" -- pnpm install
+```
+
+
+`pnpm dev:api`, `pnpm dev:web`, and the desktop `dev` / `collect` / `demo` scripts read the repo-root `.env`. You do not need a symlink under `apps/web`. If `.env` is missing and `SHIFTLOG_API_TOKEN` is unset, the API still refuses to start (fail-closed).
 
 1. ブラウザで http://localhost:3000 を開き、「有効化してデモデータを投入」
 2. タイムラインで記憶を確認
@@ -62,12 +72,14 @@ pnpm dev:web          # http://localhost:3000
 - 設定で収集 ON/OFF・一時停止・履歴削除
 - 十分窓のアップロード → Markdown 記憶化 → タイムライン/検索
 - デスクトップ実収集（macOS: System Events / Linux: xdotool または xprop）。`--demo` は擬似イベント
-- SQLite 永続化（`SHIFTLOG_DATA_DIR/shiftlog.db`）または Postgres（`DATABASE_URL`）
+- SQLite 永続化（既定 `~/.local/share/shiftlog/shiftlog.db`）または Postgres（`DATABASE_URL`）
 - ユーザ単位のデータ分離（`SHIFTLOG_API_TOKENS`）。トークン未設定時は起動拒否（fail-closed）
 - レート制限・アップロード上限・監査ログ・48h purge（自前ホスト + Vercel Cron）
 - エージェント向け `context_only`（Computer Use なし）
 
-運用手順（常駐・キーチェーン・Cron・署名）: [`docs/ops.md`](docs/ops.md)
+運用手順（常駐・キーチェーン・Cron・署名）: [`docs/ops.md`](docs/ops.md)。macOS の常駐は `pnpm setup:launchd`（`node` のフルパスと `dist/*.js`。手で `YOU` を書き換えない）。
+
+収集の質を上げるには: [ウィンドウタイトルに作業内容を出す](docs/window-titles.md)
 
 ### まだスタブのもの
 
@@ -78,6 +90,7 @@ pnpm dev:web          # http://localhost:3000
 ## セットアップ
 
 ```bash
+corepack enable
 pnpm install
 pnpm --filter @shift-log/schema build
 pnpm --filter @shift-log/api dev          # http://localhost:8787
@@ -90,7 +103,7 @@ pnpm --filter @shift-log/web dev          # http://localhost:3000
 SHIFTLOG_API_TOKEN=dev-token          # 必須。未設定なら起動しない
 # SHIFTLOG_API_TOKENS=alice:s1,bob:s2  # 任意。ユーザ単位でデータ分離
 SHIFTLOG_API_ORIGIN=http://localhost:8787
-SHIFTLOG_DATA_DIR=./data               # SQLite: data/shiftlog.db
+# SHIFTLOG_DATA_DIR=./data             # 未設定時は ~/.local/share/shiftlog。相対パスはリポジトリルート基準
 # DATABASE_URL=postgresql://...        # Vercel では必須（Postgres）
 # CRON_SECRET=...                      # Vercel 毎時 purge
 # SHIFTLOG_LLM_API_KEY=...             # 任意。十分サマリを LLM 化
@@ -120,7 +133,7 @@ Web UI は `/api/*` の Route Handler 経由で API を呼び、Bearer トーク
 | POST | `/v1/history/delete` | 直近十分 / 一時間 / 一日 / 全部（イベントも記憶も削除） |
 | GET | `/v1/agent/recent` | エージェント向け直近記憶（読み取り） |
 | POST | `/v1/agent/continue` | 「続きやって」→ `mode: context_only` |
-| GET | `/internal/cron/purge` | 48h 生イベント破棄（`CRON_SECRET`） |
+| GET | `/internal/cron/purge` | 48h 生イベント + 期限切れ十分記憶の破棄（`CRON_SECRET`） |
 
 ## Vercel
 
@@ -128,11 +141,17 @@ Web UI は `/api/*` の Route Handler 経由で API を呼び、Bearer トーク
 - API: `services/api` を別プロジェクトにし、`api/index.ts` をエントリに使用
 - またはルートの `vercel.json` で API ルートを紐付け
 
+Vercel + Postgres（Neon など）では、ウィンドウタイトルに含まれる業務情報（Slack のチャンネル名、社内ツールの案件名など）が社外のデータベースに保存されます。社内情報を扱う場合はセルフホスト（SQLite は `~/.local/share/shiftlog/shiftlog.db`、ファイル権限 0600）にしてください。タイトルを落としてアプリ名だけ残す `app_only`（#41）は未実装です。
+
 ## テスト
 
 ```bash
 pnpm test
 ```
+
+## レビュー
+
+PR は CodeRabbit と Cursor Bugbot で自動レビューされます。
 
 ## 参考
 

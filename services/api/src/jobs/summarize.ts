@@ -1,7 +1,9 @@
 import type { InteractionEvent, MemoryRecord, WindowUpload } from "@shift-log/schema";
 import { serializeMemoryMarkdown } from "@shift-log/schema";
 import type { MemoryStore } from "../lib/store.js";
-import { summarizeWithLlm } from "./llm.js";
+import { extractEntities, mergeEntities } from "./entities.js";
+import { renderLlmBody, summarizeWithLlm } from "./llm.js";
+import { aggregateTenMinuteWindow, renderTenMinuteBody } from "./ten-minute.js";
 
 function uniqueApps(events: InteractionEvent[]): string[] {
   return [...new Set(events.map((e) => e.app).filter((a): a is string => Boolean(a)))];
@@ -21,7 +23,6 @@ function detectSkillCandidate(events: InteractionEvent[]): {
 } {
   const apps = uniqueApps(events);
   const switches = events.filter((e) => e.type === "app_switch").length;
-  // Heuristic only — SkillCheck will own real detection later.
   if (switches >= 4 && apps.length <= 2) {
     return {
       skill_candidate: true,
@@ -36,70 +37,45 @@ export function deterministicTenMinuteBody(upload: WindowUpload): {
   body: string;
   apps: string[];
   skill: ReturnType<typeof detectSkillCandidate>;
+  aggregate: ReturnType<typeof aggregateTenMinuteWindow>;
 } {
-  const { metadata, events } = upload;
-  const apps = uniqueApps(events);
-  const skill = detectSkillCandidate(events);
-  const byLane = {
-    desk: events.filter((e) => e.device === "desk"),
-    mobile: events.filter((e) => e.device === "mobile"),
-  };
-  const lines: string[] = [
-    "## 作業サマリ",
-    "",
-    `- 窓: ${metadata.window_start} → ${metadata.window_end}`,
-    `- イベント数: ${events.length}`,
-    `- アプリ: ${apps.length ? apps.join(", ") : "(なし)"}`,
-  ];
-  if (metadata.dual_lane) {
-    lines.push(
-      "",
-      "### desk レーン",
-      ...byLane.desk
-        .slice(0, 8)
-        .map((e) => `- ${e.type}${e.app ? ` @ ${e.app}` : ""}${e.summary ? `: ${e.summary}` : ""}`),
-      "",
-      "### mobile レーン",
-      ...byLane.mobile
-        .slice(0, 8)
-        .map((e) => `- ${e.type}${e.app ? ` @ ${e.app}` : ""}${e.summary ? `: ${e.summary}` : ""}`),
-    );
-  } else {
-    lines.push(
-      "",
-      "### イベント",
-      ...events
-        .slice(0, 12)
-        .map(
-          (e) =>
-            `- [${e.device}] ${e.type}${e.app ? ` @ ${e.app}` : ""}${e.summary ? `: ${e.summary}` : ""}`,
-        ),
-    );
-  }
-  if (skill.skill_candidate) {
-    lines.push("", `> skill_candidate: ${skill.skill_candidate_reason}`);
-  }
+  const apps = uniqueApps(upload.events);
+  const skill = detectSkillCandidate(upload.events);
+  const aggregate = aggregateTenMinuteWindow(upload);
   const title =
     apps.length > 0
       ? `${apps.slice(0, 2).join(" / ")} — 10分サマリ`
       : "Activity — 10分サマリ";
-  return { title, body: lines.join("\n"), apps, skill };
+  return {
+    title,
+    body: renderTenMinuteBody(aggregate, skill),
+    apps,
+    skill,
+    aggregate,
+  };
 }
 
-/**
- * Turns a 10-minute window into Markdown memory.
- * Uses SHIFTLOG_LLM_* when configured; otherwise a deterministic template.
- */
 export async function summarizeTenMinuteWindow(
   store: MemoryStore,
   upload: WindowUpload,
 ): Promise<MemoryRecord> {
   const { metadata, events } = upload;
   const fallback = deterministicTenMinuteBody(upload);
-  const llm = await summarizeWithLlm(upload);
+  const previous = store.listMemories({
+    kind: "ten_minute",
+    windowStartLt: metadata.window_start,
+    limit: 1,
+  })[0];
+  const llm = await summarizeWithLlm(upload, fetch, {
+    aggregate: fallback.aggregate,
+    previous: previous
+      ? { title: previous.front_matter.title, body: previous.body }
+      : undefined,
+  });
   const title = llm?.title ?? fallback.title;
-  const body = llm?.body ?? fallback.body;
-  const { apps, skill } = fallback;
+  const body = llm ? renderLlmBody(llm, fallback.body) : fallback.body;
+  const { apps, skill, aggregate } = fallback;
+  const entities = mergeEntities(extractEntities(upload, aggregate), llm?.entities ?? []);
   const now = new Date().toISOString();
 
   const record: MemoryRecord = {
@@ -108,7 +84,7 @@ export async function summarizeTenMinuteWindow(
     updated_at: now,
     front_matter: {
       title,
-      description: `${events.length} events across ${apps.length || 0} apps`,
+      description: llm?.summary ?? `${events.length} events across ${apps.length || 0} apps`,
       apps,
       device: deviceLabel(metadata.devices),
       window_start: metadata.window_start,
@@ -117,6 +93,11 @@ export async function summarizeTenMinuteWindow(
       window_ids: [metadata.window_id],
       skill_candidate: skill.skill_candidate,
       skill_candidate_reason: skill.skill_candidate_reason,
+      apps_dwell: aggregate.apps_dwell,
+      sites: aggregate.sites,
+      ...(aggregate.projects.length > 0 ? { projects: aggregate.projects } : {}),
+      top_app: aggregate.top_app,
+      entities,
     },
     body,
   };
@@ -125,22 +106,31 @@ export async function summarizeTenMinuteWindow(
   return record;
 }
 
-/**
- * Bundle up to 36 ten-minute memories into a six-hour summary.
- */
+export function sixHourBucketUtc(iso: string): { start: string; end: string } {
+  const t = new Date(iso);
+  const hour = Math.floor(t.getUTCHours() / 6) * 6;
+  const start = new Date(
+    Date.UTC(t.getUTCFullYear(), t.getUTCMonth(), t.getUTCDate(), hour, 0, 0, 0),
+  );
+  const end = new Date(start.getTime() + 6 * 60 * 60 * 1000);
+  return { start: start.toISOString(), end: end.toISOString() };
+}
+
+export function sixHourMemoryId(bucketStart: string): string {
+  return `mem_6h_${bucketStart}`;
+}
+
 export function summarizeSixHourBundle(
   store: MemoryStore,
   tenMinuteIds: string[],
+  bucket: { start: string; end: string },
 ): MemoryRecord | null {
   const memories = tenMinuteIds
     .map((id) => store.getMemory(id))
-    .filter((m): m is MemoryRecord => Boolean(m))
-    .slice(0, 36);
+    .filter((m): m is MemoryRecord => Boolean(m));
 
   if (memories.length === 0) return null;
 
-  const window_start = memories[0]!.front_matter.window_start;
-  const window_end = memories[memories.length - 1]!.front_matter.window_end;
   const apps = [...new Set(memories.flatMap((m) => m.front_matter.apps))];
   const devices = new Set(memories.map((m) => m.front_matter.device));
   const device =
@@ -151,26 +141,27 @@ export function summarizeSixHourBundle(
         : "desk";
 
   const now = new Date().toISOString();
-  const id = `mem_6h_${window_start}`;
+  const id = sixHourMemoryId(bucket.start);
+  const existing = store.getMemory(id);
   const body = [
     "## 六時間サマリ",
     "",
-    `十秒窓相当の十分サマリ ${memories.length} 本を束ねた。`,
+    `壁時計 ${bucket.start} → ${bucket.end} の十分サマリ ${memories.length} 本。`,
     "",
     ...memories.map((m) => `- **${m.front_matter.title}**: ${m.front_matter.description}`),
   ].join("\n");
 
   const record: MemoryRecord = {
     id,
-    created_at: now,
+    created_at: existing?.created_at ?? now,
     updated_at: now,
     front_matter: {
       title: "六時間サマリ",
       description: `${memories.length} ten-minute windows`,
       apps,
       device,
-      window_start,
-      window_end,
+      window_start: bucket.start,
+      window_end: bucket.end,
       kind: "six_hour",
       window_ids: memories.flatMap((m) => m.front_matter.window_ids),
       skill_candidate: memories.some((m) => m.front_matter.skill_candidate),

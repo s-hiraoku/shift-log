@@ -2,8 +2,10 @@ import { describe, expect, it } from "vitest";
 import {
   canCollect,
   isSourceAllowed,
+  omitTitleFields,
   PermissionsConfigSchema,
   serializeMemoryMarkdown,
+  titlePolicyFor,
   WindowUploadSchema,
   type MemoryRecord,
 } from "./index.js";
@@ -38,6 +40,40 @@ describe("permissions", () => {
     });
     expect(isSourceAllowed(include, "apps", "Code")).toBe(true);
     expect(isSourceAllowed(include, "apps", "Slack")).toBe(false);
+  });
+
+  it("defaults title_policy to full and records app_only by name", () => {
+    const config = PermissionsConfigSchema.parse({
+      title_policy: { Slack: "app_only" },
+    });
+    expect(config.title_policy).toEqual({ Slack: "app_only" });
+    expect(titlePolicyFor(config, "Slack")).toBe("app_only");
+    expect(titlePolicyFor(config, "slack")).toBe("app_only");
+    expect(titlePolicyFor(config, "Code")).toBe("full");
+    expect(titlePolicyFor(PermissionsConfigSchema.parse({}), "Slack")).toBe("full");
+  });
+
+  it("rejects title_policy values other than full or app_only", () => {
+    expect(() =>
+      PermissionsConfigSchema.parse({ title_policy: { Slack: "exclude" } }),
+    ).toThrow();
+  });
+
+  it("omits summary, site, and meta while keeping app", () => {
+    expect(
+      omitTitleFields({
+        id: "e1",
+        type: "front_window_summary",
+        app: "Slack",
+        site: "app.slack.com",
+        summary: "team_frontend-pr-n10n（チャンネル）",
+        meta: { channel: "team_frontend-pr-n10n" },
+      }),
+    ).toEqual({
+      id: "e1",
+      type: "front_window_summary",
+      app: "Slack",
+    });
   });
 
   it("forbids screenshots and full keylog in capture policy", () => {
@@ -100,12 +136,22 @@ describe("memory markdown", () => {
         kind: "ten_minute",
         window_ids: ["w1"],
         skill_candidate: false,
+        apps_dwell: { Code: 420, Terminal: 180 },
+        sites: ["github.com"],
+        projects: ["shift-log"],
+        top_app: "Code",
+        entities: [{ kind: "github_repo", value: "s-hiraoku/shift-log" }],
       },
-      body: "## 作業サマリ\n\nスキーマを定義した。",
+      body: "## アプリ別滞在時間\n\n- 01:00 Code 420秒",
     };
     const md = serializeMemoryMarkdown(record);
     expect(md).toContain("title:");
     expect(md).toContain("window_start:");
-    expect(md).toContain("作業サマリ");
+    expect(md).toContain("apps_dwell:");
+    expect(md).toContain("projects: [\"shift-log\"]");
+    expect(md).toContain("top_app: \"Code\"");
+    expect(md).toContain("アプリ別滞在時間");
+    expect(md).toContain("entities:");
+    expect(md).toContain("s-hiraoku/shift-log");
   });
 });

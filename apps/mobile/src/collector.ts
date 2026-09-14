@@ -1,6 +1,8 @@
 import {
   canCollect,
   isSourceAllowed,
+  omitTitleFields,
+  titlePolicyFor,
   type InteractionEvent,
   type PermissionsConfig,
   type WindowUpload,
@@ -45,6 +47,9 @@ export class MobileCollector {
       return;
     }
     if (event.meta?.privateBrowsing === true) return;
+    if (event.app && titlePolicyFor(this.permissions, event.app) === "app_only") {
+      event = omitTitleFields(event);
+    }
 
     const allowedTypes = new Set([
       "app_switch",

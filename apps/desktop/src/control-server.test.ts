@@ -64,13 +64,54 @@ describe("control server", () => {
     expect(collector.isPaused()).toBe(false);
 
     const health = await fetch(`${base}/health`);
-    const healthBody = (await health.json()) as { paused: boolean };
+    const healthBody = (await health.json()) as {
+      paused: boolean;
+      last_error: string | null;
+    };
     expect(healthBody.paused).toBe(false);
+    expect(healthBody.last_error).toBeNull();
 
     const menu = await fetch(`${base}/`);
     const html = await menu.text();
     expect(html).toContain("一時停止");
     expect(html).not.toContain("<b>");
     expect(html).toContain("Code &lt;b&gt;");
+    expect(html).toContain("未送信");
+    expect(html).toContain("最終エラー");
+  });
+
+  it("shows retained events and the last upload error", async () => {
+    const collector = enabledCollector();
+    collector.observe({
+      id: "held",
+      type: "app_switch",
+      ts: "2026-09-12T01:00:00.000Z",
+      app: "Code",
+    });
+    collector.upload = async () => {
+      throw new Error("ECONNREFUSED");
+    };
+    await collector.flushWindow(new Date("2026-09-12T01:00:00.000Z"));
+
+    const state: ControlState = { paused: false };
+    const server = startControlServer(collector, state, {
+      port: 0,
+      onQuit: () => undefined,
+    });
+    servers.push(server);
+    const port = await listen(server);
+    const base = `http://127.0.0.1:${port}`;
+
+    const health = await fetch(`${base}/health`);
+    const healthBody = (await health.json()) as {
+      pending_count: number;
+      last_error: string | null;
+    };
+    expect(healthBody.pending_count).toBe(1);
+    expect(healthBody.last_error).toBe("ECONNREFUSED");
+
+    const html = await (await fetch(`${base}/`)).text();
+    expect(html).toContain("未送信 <b id=\"n\">1</b> 件");
+    expect(html).toContain("ECONNREFUSED");
   });
 });

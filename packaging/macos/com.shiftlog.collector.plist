@@ -5,14 +5,13 @@
   <key>Label</key>
   <string>com.shiftlog.collector</string>
   <key>WorkingDirectory</key>
-  <string>/Users/YOU/shift-log</string>
+  <string>{{REPO}}</string>
   <key>ProgramArguments</key>
   <array>
-    <string>/usr/bin/env</string>
-    <string>pnpm</string>
-    <string>--filter</string>
-    <string>@shift-log/desktop</string>
-    <string>collect</string>
+    <string>{{NODE}}</string>
+    <string>--import</string>
+    <string>{{REPO}}/scripts/load-root-env.mjs</string>
+    <string>{{REPO}}/apps/desktop/dist/collector.js</string>
   </array>
   <key>EnvironmentVariables</key>
   <dict>
@@ -24,8 +23,8 @@
   <key>KeepAlive</key>
   <true/>
   <key>StandardOutPath</key>
-  <string>/Users/YOU/Library/Logs/shiftlog-collector.log</string>
+  <string>{{HOME}}/Library/Logs/shiftlog-collector.log</string>
   <key>StandardErrorPath</key>
-  <string>/Users/YOU/Library/Logs/shiftlog-collector.log</string>
+  <string>{{HOME}}/Library/Logs/shiftlog-collector.log</string>
 </dict>
 </plist>

@@ -1,12 +1,18 @@
 import {
   canCollect,
   isSourceAllowed,
+  omitTitleFields,
+  titlePolicyFor,
   type InteractionEvent,
   type PermissionsConfig,
   type WindowUpload,
   WINDOW_DURATION_MINUTES,
 } from "@shift-log/schema";
-import { observeFrontWindow, type FrontWindow } from "./os-observe.js";
+import {
+  interpretWindowTitle,
+  observeFrontWindow,
+  type FrontWindow,
+} from "./os-observe.js";
 import { getApiToken } from "./credentials.js";
 import { startControlServer, type ControlState } from "./control-server.js";
 
@@ -20,12 +26,21 @@ import { startControlServer, type ControlState } from "./control-server.js";
 export class DesktopCollector {
   private buffer: InteractionEvent[] = [];
   private pausedLocal = false;
+  private uploadError: string | undefined;
 
   constructor(
     private permissions: PermissionsConfig,
     private apiBase: string,
     private token: string,
   ) {}
+
+  pendingEventCount(): number {
+    return this.buffer.length;
+  }
+
+  lastUploadError(): string | undefined {
+    return this.uploadError;
+  }
 
   setPermissions(permissions: PermissionsConfig): void {
     this.permissions = permissions;
@@ -73,8 +88,9 @@ export class DesktopCollector {
     if (event.meta?.privateBrowsing === true) {
       return;
     }
-    // Never accept full keystroke payloads
-    if (event.type === "typing_presence" && typeof event.meta?.keyText === "string") {
+    if (event.app && titlePolicyFor(this.permissions, event.app) === "app_only") {
+      event = omitTitleFields(event);
+    } else if (event.type === "typing_presence" && typeof event.meta?.keyText === "string") {
       const { keyText: _removed, ...rest } = event.meta;
       event = { ...event, meta: rest };
     }
@@ -116,6 +132,50 @@ export class DesktopCollector {
       body: JSON.stringify(window),
     });
   }
+
+  private restoreEvents(events: InteractionEvent[]): void {
+    this.buffer.unshift(...events);
+  }
+
+  async flushWindow(windowStart: Date): Promise<{
+    uploaded: boolean;
+    status?: number;
+    retained: number;
+    windowId?: string;
+  }> {
+    const snapshot = this.drainWindow(windowStart);
+    if (snapshot.events.length === 0) {
+      return { uploaded: false, retained: 0 };
+    }
+    try {
+      const res = await this.upload(snapshot);
+      if (!res.ok) {
+        this.restoreEvents(snapshot.events);
+        this.uploadError = `upload ${res.status}`;
+        return {
+          uploaded: false,
+          status: res.status,
+          retained: this.buffer.length,
+          windowId: snapshot.metadata.window_id,
+        };
+      }
+      this.uploadError = undefined;
+      return {
+        uploaded: true,
+        status: res.status,
+        retained: 0,
+        windowId: snapshot.metadata.window_id,
+      };
+    } catch (err) {
+      this.restoreEvents(snapshot.events);
+      this.uploadError = err instanceof Error ? err.message : String(err);
+      return {
+        uploaded: false,
+        retained: this.buffer.length,
+        windowId: snapshot.metadata.window_id,
+      };
+    }
+  }
 }
 
 async function resolveToken(): Promise<string> {
@@ -152,12 +212,17 @@ function emitDemoTick(
   return appIdx + 1;
 }
 
+function titleMeta(observed: FrontWindow): FrontWindow["meta"] {
+  return observed.meta ?? interpretWindowTitle(observed.app, observed.title);
+}
+
 export function emitOsTick(
   collector: DesktopCollector,
   observed: FrontWindow,
   last: { app: string; title: string } | null,
 ): { app: string; title: string } {
   const now = new Date().toISOString();
+  const meta = titleMeta(observed);
   if (observed.privateBrowsing) return last ?? { app: observed.app, title: observed.title };
   if (!last || last.app !== observed.app) {
     collector.observe({
@@ -167,6 +232,7 @@ export function emitOsTick(
       app: observed.app,
       site: observed.site,
       summary: `Focused ${observed.app}`,
+      ...(meta ? { meta } : {}),
     });
   }
   if (observed.site && (!last || last.title !== observed.title)) {
@@ -177,6 +243,7 @@ export function emitOsTick(
       app: observed.app,
       site: observed.site,
       summary: observed.title.slice(0, 200) || observed.site,
+      ...(meta ? { meta } : {}),
     });
   } else if (!last || last.title !== observed.title) {
     collector.observe({
@@ -186,6 +253,7 @@ export function emitOsTick(
       app: observed.app,
       site: observed.site,
       summary: observed.title.slice(0, 200) || observed.app,
+      ...(meta ? { meta } : {}),
     });
   }
   return { app: observed.app, title: observed.title };
@@ -233,24 +301,35 @@ export async function main(): Promise<void> {
 
   async function flush(): Promise<void> {
     try {
-      permissions = await loadPermissions();
-      collector.setPermissions(permissions);
-    } catch (err) {
-      console.warn("[desktop] permissions refresh failed:", err);
-    }
-    if (!canCollect(permissions)) {
-      console.log("[desktop] collection disabled — enable ShiftLog + Memories in Settings");
-      return;
-    }
-    const upload = collector.drainWindow(windowStart);
-    windowStart = new Date();
-    if (upload.events.length === 0) {
+      try {
+        permissions = await loadPermissions();
+        collector.setPermissions(permissions);
+      } catch (err) {
+        console.warn("[desktop] permissions refresh failed:", err);
+      }
+      if (!canCollect(permissions)) {
+        console.log("[desktop] collection disabled — enable ShiftLog + Memories in Settings");
+        return;
+      }
+      const result = await collector.flushWindow(windowStart);
+      if (result.uploaded) {
+        windowStart = new Date();
+        console.log(
+          `[desktop] uploaded window ${result.windowId} status=${result.status}`,
+        );
+        return;
+      }
+      if (result.retained > 0) {
+        console.warn(
+          `[desktop] flush deferred retained=${result.retained} error=${collector.lastUploadError() ?? "unknown"}`,
+        );
+        return;
+      }
+      windowStart = new Date();
       console.log("[desktop] flush skipped (no events)");
-      return;
+    } catch (err) {
+      console.warn("[desktop] flush failed:", err);
     }
-    const res = await collector.upload(upload);
-    const body = await res.text();
-    console.log(`[desktop] uploaded window ${upload.metadata.window_id} status=${res.status} ${body}`);
   }
 
   async function tick(): Promise<void> {

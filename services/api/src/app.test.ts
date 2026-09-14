@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { createApp } from "./app.js";
 import { store } from "./lib/store.js";
 import { resetRateLimitBuckets } from "./middleware/rate-limit.js";
+import { sixHourBucketUtc } from "./jobs/summarize.js";
 
 const token = "dev-token";
 
@@ -325,5 +326,228 @@ describe("ShiftLog API", () => {
     });
     expect(ok.status).toBe(200);
     expect((await ok.json()).ok).toBe(true);
+  });
+
+  it("writes one six-hour memory per UTC bucket and overwrites that id", async () => {
+    process.env.SHIFTLOG_RATE_LIMIT_PER_MIN = "200";
+    resetRateLimitBuckets();
+    store.permissions = {
+      ...store.permissions,
+      enabled: true,
+      memories_enabled: true,
+    };
+
+    async function postWindow(windowId: string, startIso: string) {
+      const start = new Date(startIso);
+      const end = new Date(start.getTime() + 10 * 60_000);
+      const res = await app.request("/v1/windows", {
+        method: "POST",
+        headers: authHeaders(),
+        body: JSON.stringify({
+          metadata: {
+            window_id: windowId,
+            window_start: start.toISOString(),
+            window_end: end.toISOString(),
+            devices: ["desk"],
+            dual_lane: false,
+            event_count: 1,
+            schema_version: "1",
+          },
+          events: [
+            {
+              id: `${windowId}-e`,
+              type: "app_switch",
+              ts: start.toISOString(),
+              device: "desk",
+              app: "Code",
+            },
+          ],
+        }),
+      });
+      expect(res.status).toBe(200);
+    }
+
+    const current = sixHourBucketUtc(new Date().toISOString());
+    const bucketMs = 6 * 60 * 60 * 1000;
+    const starts = [0, 1, 2, 3].map((i) =>
+      new Date(new Date(current.start).getTime() - i * bucketMs + 10 * 60_000).toISOString(),
+    );
+
+    for (let i = 0; i < 7; i++) {
+      const start = new Date(new Date(current.start).getTime() + (10 + i * 10) * 60_000);
+      await postWindow(`w-new-${i}`, start.toISOString());
+    }
+    await postWindow("w-b1", starts[1]!);
+    await postWindow("w-b2", starts[2]!);
+    await postWindow("w-b3", starts[3]!);
+
+    const sixHour = [...store.memories.values()].filter(
+      (m) => m.front_matter.kind === "six_hour",
+    );
+    expect(sixHour).toHaveLength(4);
+
+    const newestId = sixHour.find((m) =>
+      m.front_matter.window_ids.includes("w-new-0"),
+    )?.id;
+    expect(newestId).toMatch(/^mem_6h_/);
+    const newestRecord = store.getMemory(newestId!);
+    expect(newestRecord?.front_matter.window_ids).toHaveLength(7);
+    expect(
+      sixHour.filter((m) => m.id === newestId),
+    ).toHaveLength(1);
+
+    const created = newestRecord!.created_at;
+    await postWindow(
+      "w-new-extra",
+      new Date(new Date(current.start).getTime() + 90 * 60_000).toISOString(),
+    );
+    const after = store.getMemory(newestId!);
+    expect(after?.created_at).toBe(created);
+    expect(after?.front_matter.window_ids).toHaveLength(8);
+    expect(
+      [...store.memories.values()].filter((m) => m.front_matter.kind === "six_hour"),
+    ).toHaveLength(4);
+
+    const filtered = await app.request("/v1/timeline?kind=six_hour&limit=20", {
+      headers: authHeaders(),
+    });
+    const filteredBody = await filtered.json();
+    expect(filteredBody.items).toHaveLength(4);
+    expect(
+      filteredBody.items.every((m: { front_matter: { kind: string } }) => m.front_matter.kind === "six_hour"),
+    ).toBe(true);
+
+    const tens = await app.request("/v1/timeline?kind=ten_minute&limit=20", {
+      headers: authHeaders(),
+    });
+    const tensBody = await tens.json();
+    expect(
+      tensBody.items.every((m: { front_matter: { kind: string } }) => m.front_matter.kind === "ten_minute"),
+    ).toBe(true);
+    expect(tensBody.items.length).toBeGreaterThan(0);
+  });
+
+  it("continues with a keyword that is not in the recent window", async () => {
+    const older = "2026-09-10T08:00:00.000Z";
+    store.putMemory({
+      id: "pony",
+      created_at: older,
+      updated_at: older,
+      front_matter: {
+        title: "Ghostty / Slack",
+        description: "PR review",
+        apps: ["ghostty", "Slack"],
+        device: "desk",
+        window_start: older,
+        window_end: "2026-09-10T08:10:00.000Z",
+        kind: "ten_minute",
+        window_ids: ["pony"],
+        skill_candidate: false,
+        entities: [{ kind: "github_repo", value: "DietrichGebert/ponytail" }],
+      },
+      body: "reviewed a PR",
+    });
+    for (let i = 0; i < 15; i += 1) {
+      const start = new Date(Date.now() - i * 10 * 60_000).toISOString();
+      store.putMemory({
+        id: `recent-${i}`,
+        created_at: start,
+        updated_at: start,
+        front_matter: {
+          title: `Recent ${i}`,
+          description: "unrelated",
+          apps: ["Code"],
+          device: "desk",
+          window_start: start,
+          window_end: new Date(new Date(start).getTime() + 10 * 60_000).toISOString(),
+          kind: "ten_minute",
+          window_ids: [`recent-${i}`],
+          skill_candidate: false,
+        },
+        body: "editor work",
+      });
+    }
+
+    const cont = await app.request("/v1/agent/continue", {
+      method: "POST",
+      headers: authHeaders(),
+      body: JSON.stringify({ prompt: "ponytail", limit: 12 }),
+    });
+    expect(cont.status).toBe(200);
+    const body = await cont.json();
+    expect(body.mode).toBe("context_only");
+    expect(body.memories.find((m: { id: string }) => m.id === "pony")).toEqual(
+      expect.objectContaining({
+        id: "pony",
+        matched_by: "keyword",
+      }),
+    );
+    expect(body.memories.some((m: { matched_by: string }) => m.matched_by === "recent")).toBe(
+      true,
+    );
+  });
+
+  it("excludes memories outside since/until on continue, timeline, and search", async () => {
+    store.putMemory({
+      id: "pony",
+      created_at: "2026-09-10T08:00:00.000Z",
+      updated_at: "2026-09-10T08:00:00.000Z",
+      front_matter: {
+        title: "Ghostty / Slack",
+        description: "PR review",
+        apps: ["ghostty", "Slack"],
+        device: "desk",
+        window_start: "2026-09-10T08:00:00.000Z",
+        window_end: "2026-09-10T08:10:00.000Z",
+        kind: "ten_minute",
+        window_ids: ["pony"],
+        skill_candidate: false,
+        entities: [{ kind: "github_repo", value: "DietrichGebert/ponytail" }],
+      },
+      body: "reviewed a PR",
+    });
+    store.putMemory({
+      id: "today",
+      created_at: "2026-09-12T12:00:00.000Z",
+      updated_at: "2026-09-12T12:00:00.000Z",
+      front_matter: {
+        title: "Code",
+        description: "today",
+        apps: ["Code"],
+        device: "desk",
+        window_start: "2026-09-12T12:00:00.000Z",
+        window_end: "2026-09-12T12:10:00.000Z",
+        kind: "ten_minute",
+        window_ids: ["today"],
+        skill_candidate: false,
+      },
+      body: "today",
+    });
+
+    const since = "2026-09-12T00:00:00.000Z";
+    const until = "2026-09-12T23:59:59.000Z";
+    const cont = await app.request("/v1/agent/continue", {
+      method: "POST",
+      headers: authHeaders(),
+      body: JSON.stringify({ prompt: "ponytail", since, until }),
+    });
+    const contBody = await cont.json();
+    expect(contBody.memories.map((m: { id: string }) => m.id)).toEqual(["today"]);
+    expect(contBody.memories[0].matched_by).toBe("recent");
+
+    const timeline = await app.request(
+      `/v1/timeline?since=${encodeURIComponent(since)}&until=${encodeURIComponent(until)}`,
+      { headers: authHeaders() },
+    );
+    expect((await timeline.json()).items.map((m: { id: string }) => m.id)).toEqual(["today"]);
+
+    const search = await app.request(
+      `/v1/search?q=ponytail&since=${encodeURIComponent(since)}&until=${encodeURIComponent(until)}`,
+      { headers: authHeaders() },
+    );
+    expect((await search.json()).items).toEqual([]);
+
+    const searchAll = await app.request("/v1/search?q=ponytail", { headers: authHeaders() });
+    expect((await searchAll.json()).items.map((m: { id: string }) => m.id)).toEqual(["pony"]);
   });
 });

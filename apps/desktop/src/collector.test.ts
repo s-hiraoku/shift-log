@@ -50,6 +50,96 @@ describe("DesktopCollector", () => {
     expect(window.events[0]?.meta?.other).toBe(true);
   });
 
+  it("records Slack dwell without title when title_policy is app_only", () => {
+    const collector = new DesktopCollector(
+      PermissionsConfigSchema.parse({
+        enabled: true,
+        memories_enabled: true,
+        title_policy: { Slack: "app_only" },
+      }),
+      "http://localhost:8787",
+      "dev-token",
+    );
+    collector.observe({
+      id: "slack-channel",
+      type: "front_window_summary",
+      ts: "2026-09-13T01:00:00.000Z",
+      app: "Slack",
+      site: "app.slack.com",
+      summary: "team_frontend-pr-n10n（チャンネル）",
+      meta: { channel: "team_frontend-pr-n10n" },
+    });
+    collector.observe({
+      id: "code-full",
+      type: "front_window_summary",
+      ts: "2026-09-13T01:01:00.000Z",
+      app: "Code",
+      summary: "collector.ts",
+    });
+    const window = collector.drainWindow(new Date("2026-09-13T01:00:00.000Z"));
+    expect(window.events).toEqual([
+      {
+        id: "slack-channel",
+        type: "front_window_summary",
+        ts: "2026-09-13T01:00:00.000Z",
+        device: "desk",
+        app: "Slack",
+      },
+      {
+        id: "code-full",
+        type: "front_window_summary",
+        ts: "2026-09-13T01:01:00.000Z",
+        device: "desk",
+        app: "Code",
+        summary: "collector.ts",
+      },
+    ]);
+    expect(JSON.stringify(window.events)).not.toContain("team_frontend-pr-n10n");
+  });
+
+  it("still drops excluded Slack even when title_policy is app_only", () => {
+    const collector = new DesktopCollector(
+      PermissionsConfigSchema.parse({
+        enabled: true,
+        memories_enabled: true,
+        apps: { mode: "exclude_listed", exclude: ["Slack"], include_only: [] },
+        title_policy: { Slack: "app_only" },
+      }),
+      "http://localhost:8787",
+      "dev-token",
+    );
+    collector.observe({
+      id: "slack-excluded",
+      type: "front_window_summary",
+      ts: "2026-09-13T01:00:00.000Z",
+      app: "Slack",
+      summary: "team_frontend-pr-n10n（チャンネル）",
+    });
+    const window = collector.drainWindow(new Date("2026-09-13T01:00:00.000Z"));
+    expect(window.events).toEqual([]);
+  });
+
+  it("strips Slack titles from OS ticks when title_policy is app_only", () => {
+    const collector = new DesktopCollector(
+      PermissionsConfigSchema.parse({
+        enabled: true,
+        memories_enabled: true,
+        title_policy: { slack: "app_only" },
+      }),
+      "http://localhost:8787",
+      "dev-token",
+    );
+    emitOsTick(
+      collector,
+      { app: "Slack", title: "alice（DM）" },
+      null,
+    );
+    const window = collector.drainWindow(new Date());
+    expect(window.events.map((e) => e.app)).toEqual(["Slack", "Slack"]);
+    expect(window.events.every((e) => e.summary === undefined)).toBe(true);
+    expect(JSON.stringify(window.events)).not.toContain("alice");
+  });
+
   it("respects pause from menu bar", () => {
     const collector = new DesktopCollector(
       PermissionsConfigSchema.parse({
@@ -93,5 +183,94 @@ describe("DesktopCollector", () => {
       "browser_navigation",
     ]);
     expect(window.events.some((e) => e.type === "typing_presence")).toBe(false);
+  });
+
+  it("copies interpreted editor and terminal title meta onto events", () => {
+    const collector = new DesktopCollector(
+      PermissionsConfigSchema.parse({
+        enabled: true,
+        memories_enabled: true,
+      }),
+      "http://localhost:8787",
+      "dev-token",
+    );
+    emitOsTick(collector, { app: "Cursor", title: "shift-log — collector.ts" }, null);
+    emitOsTick(
+      collector,
+      { app: "ghostty", title: "~/src/shift-log (main)" },
+      { app: "Cursor", title: "shift-log — collector.ts" },
+    );
+    const window = collector.drainWindow(new Date());
+    const cursor = window.events.find((e) => e.app === "Cursor");
+    const ghostty = window.events.find((e) => e.app === "ghostty" && e.type === "front_window_summary");
+    expect(cursor?.meta).toEqual({ project: "shift-log", file: "collector.ts" });
+    expect(ghostty?.meta).toEqual({ cwd: "~/src/shift-log", branch: "main" });
+  });
+
+  it("keeps buffered events when upload rejects", async () => {
+    const collector = new DesktopCollector(
+      PermissionsConfigSchema.parse({
+        enabled: true,
+        memories_enabled: true,
+      }),
+      "http://127.0.0.1:1",
+      "dev-token",
+    );
+    collector.observe({
+      id: "keep-me",
+      type: "app_switch",
+      ts: "2026-09-12T00:00:00.000Z",
+      app: "Code",
+    });
+    collector.upload = async () => {
+      throw new Error("ECONNREFUSED");
+    };
+
+    const first = await collector.flushWindow(new Date("2026-09-12T00:00:00.000Z"));
+    expect(first).toEqual({
+      uploaded: false,
+      retained: 1,
+      windowId: "desk_2026-09-12T00:00:00.000Z",
+    });
+    expect(collector.pendingEventCount()).toBe(1);
+    expect(collector.lastUploadError()).toBe("ECONNREFUSED");
+
+    const retry = collector.drainWindow(new Date("2026-09-12T00:00:00.000Z"));
+    expect(retry.events.map((e) => e.id)).toEqual(["keep-me"]);
+  });
+
+  it("keeps buffered events when upload returns HTTP 503", async () => {
+    const collector = new DesktopCollector(
+      PermissionsConfigSchema.parse({
+        enabled: true,
+        memories_enabled: true,
+      }),
+      "http://127.0.0.1:1",
+      "dev-token",
+    );
+    collector.observe({
+      id: "keep-503",
+      type: "front_window_summary",
+      ts: "2026-09-12T00:10:00.000Z",
+      app: "Chrome",
+    });
+    collector.upload = async () => new Response("api down", { status: 503 });
+
+    const first = await collector.flushWindow(new Date("2026-09-12T00:10:00.000Z"));
+    expect(first.uploaded).toBe(false);
+    expect(first.status).toBe(503);
+    expect(first.retained).toBe(1);
+    expect(collector.lastUploadError()).toBe("upload 503");
+
+    collector.upload = async () => new Response("ok", { status: 200 });
+    const second = await collector.flushWindow(new Date("2026-09-12T00:10:00.000Z"));
+    expect(second).toEqual({
+      uploaded: true,
+      status: 200,
+      retained: 0,
+      windowId: "desk_2026-09-12T00:10:00.000Z",
+    });
+    expect(collector.pendingEventCount()).toBe(0);
+    expect(collector.lastUploadError()).toBeUndefined();
   });
 });

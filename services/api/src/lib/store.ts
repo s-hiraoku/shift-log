@@ -16,6 +16,19 @@ import {
   type TenantSnapshot,
 } from "./persist.js";
 
+function memoryMatchesQuery(memory: MemoryRecord, q: string): boolean {
+  const hay = [
+    memory.front_matter.title,
+    memory.front_matter.description,
+    memory.body,
+    ...memory.front_matter.apps,
+    ...(memory.front_matter.entities ?? []).map((entity) => entity.value),
+  ]
+    .join(" ")
+    .toLowerCase();
+  return hay.includes(q);
+}
+
 export type StoredWindow = {
   metadata: WindowMetadata;
   events: InteractionEvent[];
@@ -58,6 +71,24 @@ export function isRawWindowExpired(
   return new Date(metadata.window_end) < hoursAgo(RAW_EVENT_RETENTION_HOURS, now);
 }
 
+export function tenMinuteRetentionDays(
+  raw = process.env.SHIFTLOG_TEN_MINUTE_RETENTION_DAYS,
+): number {
+  const n = raw === undefined || raw === "" ? 14 : Number(raw);
+  if (!Number.isFinite(n) || n < 1) return 14;
+  return Math.floor(n);
+}
+
+export function isTenMinuteMemoryExpired(
+  record: Pick<MemoryRecord, "front_matter">,
+  now = new Date(),
+  days = tenMinuteRetentionDays(),
+): boolean {
+  if (record.front_matter.kind !== "ten_minute") return false;
+  const cutoff = new Date(now.getTime() - days * 24 * 60 * 60 * 1000);
+  return new Date(record.front_matter.window_end) < cutoff;
+}
+
 /**
  * Per-user store. Durable backend is SQLite (SHIFTLOG_DATA_DIR/shiftlog.db)
  * or Postgres (DATABASE_URL). Tests stay in-memory (VITEST / SHIFTLOG_PERSIST=0).
@@ -79,6 +110,7 @@ export class MemoryStore {
     this.windows = new Map(snapshot.windows.map((w) => [w.metadata.window_id, w]));
     this.memories = new Map(snapshot.memories.map((m) => [m.id, m]));
     this.purgeExpiredRawEvents();
+    this.purgeExpiredTenMinuteMemories();
     this.hydrated = true;
   }
 
@@ -116,23 +148,38 @@ export class MemoryStore {
     return stored;
   }
 
-  listMemories(opts: { q?: string; limit: number }): MemoryRecord[] {
+  listMemories(opts: {
+    q?: string;
+    limit: number;
+    kind?: "ten_minute" | "six_hour";
+    windowStartGte?: string;
+    windowStartLt?: string;
+    since?: string;
+    until?: string;
+  }): MemoryRecord[] {
     let items = [...this.memories.values()].sort((a, b) =>
       b.front_matter.window_start.localeCompare(a.front_matter.window_start),
     );
+    if (opts.kind) {
+      items = items.filter((m) => m.front_matter.kind === opts.kind);
+    }
+    if (opts.windowStartGte) {
+      items = items.filter((m) => m.front_matter.window_start >= opts.windowStartGte!);
+    }
+    if (opts.windowStartLt) {
+      items = items.filter((m) => m.front_matter.window_start < opts.windowStartLt!);
+    }
+    if (opts.since) {
+      const sinceMs = new Date(opts.since).getTime();
+      items = items.filter((m) => new Date(m.front_matter.window_start).getTime() >= sinceMs);
+    }
+    if (opts.until) {
+      const untilMs = new Date(opts.until).getTime();
+      items = items.filter((m) => new Date(m.front_matter.window_start).getTime() <= untilMs);
+    }
     if (opts.q) {
       const q = opts.q.toLowerCase();
-      items = items.filter((m) => {
-        const hay = [
-          m.front_matter.title,
-          m.front_matter.description,
-          m.body,
-          ...m.front_matter.apps,
-        ]
-          .join(" ")
-          .toLowerCase();
-        return hay.includes(q);
-      });
+      items = items.filter((m) => memoryMatchesQuery(m, q));
     }
     return items.slice(0, opts.limit);
   }
@@ -152,6 +199,18 @@ export class MemoryStore {
     for (const [id, w] of this.windows) {
       if (isRawWindowExpired(w.metadata, now)) {
         this.windows.delete(id);
+        removed += 1;
+      }
+    }
+    if (removed > 0) this.persist();
+    return removed;
+  }
+
+  purgeExpiredTenMinuteMemories(now = new Date()): number {
+    let removed = 0;
+    for (const [id, memory] of this.memories) {
+      if (isTenMinuteMemoryExpired(memory, now)) {
+        this.memories.delete(id);
         removed += 1;
       }
     }
@@ -228,7 +287,9 @@ export function purgeAllTenants(now = new Date()): number {
   let removed = 0;
   const ids = new Set<string>(["default", ...listPersistedUserIdsSync(), ...cache.keys()]);
   for (const id of ids) {
-    removed += storeFor(id).purgeExpiredRawEvents(now);
+    const tenant = storeFor(id);
+    removed += tenant.purgeExpiredRawEvents(now);
+    removed += tenant.purgeExpiredTenMinuteMemories(now);
   }
   return removed;
 }

@@ -1,23 +1,52 @@
-import type { InteractionEvent, WindowUpload } from "@shift-log/schema";
+import { LlmMemorySchema, type LlmMemory, type WindowUpload } from "@shift-log/schema";
+import { aggregateTenMinuteWindow, type TenMinuteAggregate } from "./ten-minute.js";
 
-export type LlmSummary = {
-  title: string;
-  body: string;
+export type LlmSummary = LlmMemory;
+
+export type LlmContext = {
+  aggregate?: TenMinuteAggregate;
+  previous?: { title: string; body: string };
 };
 
 function llmConfigured(): boolean {
   return Boolean(process.env.SHIFTLOG_LLM_API_KEY);
 }
 
-/**
- * Optional OpenAI-compatible chat completion.
- * Never sends keystroke text (callers must pass already-sanitized events).
- * Returns null when unset or on any failure — caller falls back to template.
- */
+function buildPrompt(
+  upload: WindowUpload,
+  aggregate: TenMinuteAggregate,
+  previous?: { title: string; body: string },
+): string {
+  return [
+    "Summarize this 10-minute activity window.",
+    "Write Japanese. Do not invent keystrokes, screenshots, or private-browsing activity.",
+    'Return JSON {"title": string, "summary": string, "unfinished": string, "entities": [{"kind":"github_repo"|"github_pr"|"slack_channel"|"url"|"file","value":string}]} only.',
+    "title is short. summary is 2 to 3 sentences about what the person was doing.",
+    "If the previous memory is the same work, write summary as a continuation of that work.",
+    "unfinished is work that still looks open. Use an empty string when none.",
+    `window: ${upload.metadata.window_start} -> ${upload.metadata.window_end}`,
+    `dwell: ${JSON.stringify(aggregate.apps_dwell)}`,
+    `top_app: ${aggregate.top_app ?? ""}`,
+    `focus_spans: ${JSON.stringify(
+      aggregate.spans.map((span) => ({
+        start: span.start,
+        end: span.end,
+        app: span.app,
+        title: span.title,
+        site: span.site,
+      })),
+    )}`,
+    previous
+      ? `previous_memory: ${JSON.stringify({ title: previous.title, body: previous.body })}`
+      : "previous_memory: null",
+  ].join("\n");
+}
+
 export async function summarizeWithLlm(
   upload: WindowUpload,
   fetchImpl: typeof fetch = fetch,
-): Promise<LlmSummary | null> {
+  context: LlmContext = {},
+): Promise<LlmMemory | null> {
   if (!llmConfigured()) return null;
   const key = process.env.SHIFTLOG_LLM_API_KEY!;
   const base = (process.env.SHIFTLOG_LLM_BASE_URL ?? "https://api.openai.com/v1").replace(
@@ -25,21 +54,8 @@ export async function summarizeWithLlm(
     "",
   );
   const model = process.env.SHIFTLOG_LLM_MODEL ?? "gpt-4o-mini";
-  const events = upload.events.slice(0, 40).map((e: InteractionEvent) => ({
-    type: e.type,
-    ts: e.ts,
-    device: e.device,
-    app: e.app,
-    site: e.site,
-    summary: e.summary,
-  }));
-  const prompt = [
-    "Summarize this 10-minute activity window as Japanese Markdown.",
-    "Do not invent keystrokes, screenshots, or private-browsing activity.",
-    "Return JSON {\"title\": string, \"body\": string} only.",
-    `window: ${upload.metadata.window_start} → ${upload.metadata.window_end}`,
-    `events: ${JSON.stringify(events)}`,
-  ].join("\n");
+  const aggregate = context.aggregate ?? aggregateTenMinuteWindow(upload);
+  const prompt = buildPrompt(upload, aggregate, context.previous);
 
   try {
     const res = await fetchImpl(`${base}/chat/completions`, {
@@ -67,10 +83,28 @@ export async function summarizeWithLlm(
     };
     const content = data.choices?.[0]?.message?.content;
     if (!content) return null;
-    const parsed = JSON.parse(content) as Partial<LlmSummary>;
-    if (!parsed.title || !parsed.body) return null;
-    return { title: String(parsed.title).slice(0, 120), body: String(parsed.body) };
+    const parsed = LlmMemorySchema.safeParse(JSON.parse(content));
+    if (!parsed.success) return null;
+    return {
+      ...parsed.data,
+      title: parsed.data.title.slice(0, 120),
+    };
   } catch {
     return null;
   }
+}
+
+export function renderLlmBody(llm: LlmMemory, deterministicBody: string): string {
+  const unfinished = llm.unfinished.trim() === "" ? "（なし）" : llm.unfinished.trim();
+  return [
+    "## 要約",
+    "",
+    llm.summary.trim(),
+    "",
+    "## 未完",
+    "",
+    unfinished,
+    "",
+    deterministicBody,
+  ].join("\n");
 }

@@ -48,10 +48,13 @@ export function startControlServer(
     };
 
     if (req.method === "GET" && (url.pathname === "/" || url.pathname === "/menu")) {
+      const pending = collector.pendingEventCount();
+      const lastError = collector.lastUploadError() ?? "-";
       const html = `<!doctype html><meta charset="utf-8"><title>ShiftLog</title>
 <body style="font-family:sans-serif;background:#111;color:#eee;padding:16px">
 <h1>ShiftLog</h1>
 <p>paused: <b id="p">${state.paused ? "true" : "false"}</b> last: <span id="a">${escapeHtml(state.lastApp ?? "-")}</span></p>
+<p>未送信 <b id="n">${pending}</b> 件 / 最終エラー: <span id="e">${escapeHtml(lastError)}</span></p>
 <button onclick="post('/pause')">一時停止</button>
 <button onclick="post('/resume')">再開</button>
 <button onclick="post('/quit')">終了</button>
@@ -64,7 +67,12 @@ setInterval(()=>location.reload(), 5000)
       return;
     }
     if (req.method === "GET" && url.pathname === "/health") {
-      return send(200, { ok: true, ...state });
+      return send(200, {
+        ok: true,
+        ...state,
+        pending_count: collector.pendingEventCount(),
+        last_error: collector.lastUploadError() ?? null,
+      });
     }
     if (req.method === "POST" && url.pathname === "/pause") {
       collector.pause();
