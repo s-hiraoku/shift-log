@@ -42,6 +42,22 @@ Cursor などではリポジトリの Skill を有効化するか、`skills/shif
 - 同一十分窓に PC とスマホがいれば `desk` / `mobile` の二レーン
 
 
+## インストール（macOS）
+
+Git と Node.js 20 以降が必要です。ワンライナーはソースを `~/.local/share/shiftlog/src` に置き、`pnpm setup:launchd` まで実行します。SQLite は `~/.local/share/shiftlog/shiftlog.db` に残ります。
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/s-hiraoku/shift-log/main/scripts/install.sh | bash
+```
+
+更新（DB / `.env` / キーチェーンは消さない）:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/s-hiraoku/shift-log/main/scripts/install.sh | bash -s -- update
+```
+
+Linux では同じスクリプトがソース配置とビルドまで行い、常駐は [`docs/ops.md`](docs/ops.md) の systemd 手順を使います。開発用にリポジトリを直接 clone する場合は次の手順です。
+
 ## MVP クイックスタート
 
 ```bash
