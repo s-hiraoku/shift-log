@@ -74,12 +74,34 @@ store_credentials() {
   pnpm --filter @shift-log/desktop credentials set
 }
 
+pinned_pnpm_version() {
+  node -p "String(require('$SRC_DIR/package.json').packageManager || '').replace(/^pnpm@/, '').split('+')[0]"
+}
+
+# PATH 上の pnpm が packageManager と違うと pnpm 自身がバージョン不一致で終了するため、
+# 「pnpm があるか」ではなく「固定版があるか」を満たす。無ければ node 同梱の npm で
+# データディレクトリへ取り寄せ、PATH 先頭に置く（setup-launchd.mjs が spawn する
+# 入れ子の pnpm も同じものを掴む）。グローバルの pnpm は触らない。
+ensure_pnpm() {
+  local want
+  want="$(pinned_pnpm_version)"
+  [[ -n "$want" ]] || die "package.json has no packageManager field"
+  if [[ "$(pnpm --version 2>/dev/null || true)" == "$want" ]]; then
+    return
+  fi
+  local dir="$DATA_DIR/toolchain/pnpm-$want"
+  if [[ ! -x "$dir/node_modules/.bin/pnpm" ]]; then
+    echo "shiftlog: installing pnpm $want into $dir" >&2
+    mkdir -p "$dir"
+    npm install --silent --no-fund --no-audit --prefix "$dir" "pnpm@$want" >/dev/null \
+      || die "could not install pnpm $want"
+  fi
+  export PATH="$dir/node_modules/.bin:$PATH"
+}
+
 bootstrap() {
   cd "$SRC_DIR"
-  if command -v corepack >/dev/null 2>&1; then
-    corepack enable >/dev/null || true
-  fi
-  require_cmd pnpm
+  ensure_pnpm
   pnpm install
   pnpm --filter @shift-log/schema build
   ensure_env
@@ -98,6 +120,7 @@ esac
 
 require_cmd git
 require_cmd node
+require_cmd npm
 
 ensure_src
 if [[ "$action" == "update" || "$SRC_EXISTED" -eq 1 ]]; then
