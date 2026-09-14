@@ -12,7 +12,7 @@ Timeline lists Markdown memories newest-first. Search filters by title, body, or
 
 ## How to get to it (user POV)
 
-- Choose nav `タイムライン` or the home/settings link `タイムラインへ`.
+- Choose nav `タイムライン` or the home link `タイムラインへ`. Settings has no `タイムラインへ` link.
 - Type in the search field and press Enter or choose `検索`.
 - Choose a memory title link.
 
@@ -30,7 +30,7 @@ Preconditions:
 - **Title/app match.** Run `node helpers/browser.mjs fill --placeholder "検索（タイトル・本文・アプリ）" --value "Code"` then `click --text "検索"`. Wait until `Code / Chrome — 10分サマリ` is visible and `Safari — 10分サマリ` is not. Second view: `curl -sS -H "Authorization: Bearer $SHIFTLOG_API_TOKEN" "$SHIFTLOG_API_ORIGIN/v1/search?q=Code"` — every `items[].front_matter.apps` or title/body contains `Code`.
 - **Body match.** Replace the query with `pnpm test` (demo dual-window summary includes `Ran pnpm test`). Run `fill --placeholder "検索（タイトル・本文・アプリ）" --value "pnpm test"` and `click --text "検索"`. `Terminal / Slack — 10分サマリ` remains.
 - **Miss.** Run `fill --placeholder "検索（タイトル・本文・アプリ）" --value "volcano"` and `click --text "検索"`. The list shows `まだ記憶がありません。収集を有効化して窓をアップロードしてください。` API `q=volcano` returns `"items":[]`.
-- **Open detail.** Clear back to a match, then `click --text "Code / Chrome — 10分サマリ"`. Heading is that title. Section `Markdown 記憶` contains `## Focus span` and a line mentioning `Code`. Back link `← タイムライン` returns to `/timeline`.
+- **Open detail.** Clear back to a match, then `click --text "Code / Chrome — 10分サマリ"`. Heading is that title. Section `Markdown 記憶` contains `## Focus span` and a line mentioning `Code`. Demo Code / Terminal YAML includes `projects: ["shift-log"]`. Back link `← タイムライン` returns to `/timeline`.
 - **Proof.** Snapshot + screenshot of the `Code` search results, plus the search JSON. Record feature id `timeline-and-search` and the entry used (`検索` button vs Enter).
 
 ## Gotchas

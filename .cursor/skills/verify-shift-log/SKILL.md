@@ -93,8 +93,8 @@ Stable handles observed in `apps/web` (Japanese UI, `lang=ja`):
 | Nav | links `ホーム` `/`, `設定` `/settings`, `許可リスト` `/permissions`, `タイムライン` `/timeline` |
 | Home seed | button `有効化してデモデータを投入` (busy label `処理中…`) |
 | Home after seed | status `準備完了: windows=N, memories=N. タイムラインを開いてください。` |
-| Home badges | `デフォルトオフ` → `収集オン` after both `enabled` and `memories_enabled` |
-| Home jumps | links `タイムラインへ`, `設定へ` |
+| Home badges | `デフォルトオフ` → `収集オン` after both `enabled` and `memories_enabled`. Static `screenshots: off` and `keylog: forbidden` stay on home. |
+| Home jumps | links `タイムラインへ`, `設定へ`. Settings has no `タイムラインへ` (use nav `タイムライン`). |
 | Settings toggles | labels `ShiftLog を有効化`, `Memories 相当を有効化（必須）`, `一時停止（メニューバー / コントロールセンター相当）` |
 | Settings save | button `保存` → status `保存しました` |
 | Settings seed | button `デモデータを投入` → `デモ投入完了: windows=N, memories=N` |
@@ -119,7 +119,7 @@ Proof standards:
 - Capture the action and the resulting state (before + after), not only the final screen.
 - Verify side effects: `GET /v1/timeline`, `GET /v1/permissions`, or reopen the screen. For search, a matching title must appear and a miss must not.
 - Record `feature` id and entry point on every artifact (`proof.json` in the feature evidence folder).
-- UI proof: page text snapshot **and** a screenshot that shows the `ShiftLog` brand in the top bar. Treat the text snapshot as authoritative for Japanese labels; headless Chrome may substitute fallback glyphs.
+- UI proof: page text snapshot **and** a screenshot that shows the `ShiftLog` brand in the top bar. Treat the text snapshot as authoritative for Japanese labels; headless Chrome may substitute fallback glyphs. `snapshot` writes `document.body.innerText` (which omits `<textarea>` values) plus a `--- form fields ---` block of labeled `textarea` / `select` / `input` values. Grep allowlist values in that block, or read `.value` via `eval`.
 - API proof: request URL, status, and body (json file).
 - Demo titles (deterministic template, no `SHIFTLOG_LLM_API_KEY`): `Code / Chrome — 10分サマリ`, `Terminal / Slack — 10分サマリ`, `Safari — 10分サマリ`. Window ids include timestamps, so a second seed adds more rows rather than replacing them.
 
@@ -141,7 +141,7 @@ All scripts are executable. `launch.sh` prints the state file path on stdout; ot
 | --- | --- |
 | `.cursor/skills/verify-shift-log/helpers/launch.sh` | Isolated API + web. No seed. |
 | `.cursor/skills/verify-shift-log/helpers/doctor.sh` | Read-only health + isolation check. |
-| `node .cursor/skills/verify-shift-log/helpers/browser.mjs <cmd>` | Chrome CDP: `start`, `goto`, `click --text`, `fill --placeholder --value`, `check --text --checked`, `wait --text`, `snapshot --path`, `screenshot --path`, `eval --js`. |
+| `node .cursor/skills/verify-shift-log/helpers/browser.mjs <cmd>` | Chrome CDP: `start`, `goto`, `click --text`, `fill --placeholder --value`, `check --text --checked`, `wait --text`, `snapshot --path` (innerText plus `--- form fields ---`), `screenshot --path`, `eval --js`. |
 | `.cursor/skills/verify-shift-log/helpers/prove-home-seed.sh` | One mapped feature: empty home → seed button → timeline titles + API proof. |
 | `.cursor/skills/verify-shift-log/helpers/cleanup.sh` | Kill recorded PIDs; keep evidence. |
 

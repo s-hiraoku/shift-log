@@ -321,8 +321,31 @@ async function main() {
       if (!path) die("snapshot requires --path");
       const text = (await evaluate(cdp, "document.body ? document.body.innerText : ''")) || "";
       const html = (await evaluate(cdp, "document.documentElement ? document.documentElement.outerHTML : ''")) || "";
+      // innerText omits <textarea> values; append labeled control values so allowlist proofs can grep Slack.
+      const formFields = await evaluate(
+        cdp,
+        `(() => {
+          const norm = (s) => (s || "").replace(/\\s+/g, " ").trim();
+          return [...document.querySelectorAll("textarea, select, input")].map((el) => {
+            const label = el.closest("label");
+            let name = "";
+            if (label) {
+              const clone = label.cloneNode(true);
+              clone.querySelectorAll("textarea, select, input").forEach((n) => n.remove());
+              name = norm(clone.innerText || clone.textContent);
+            }
+            if (!name) name = el.getAttribute("placeholder") || el.name || el.id || el.tagName;
+            const value = el.type === "checkbox" || el.type === "radio" ? String(el.checked) : el.value;
+            return el.tagName.toLowerCase() + " " + name + ": " + JSON.stringify(value);
+          });
+        })()`,
+      );
+      const body =
+        Array.isArray(formFields) && formFields.length > 0
+          ? `${text}\n--- form fields ---\n${formFields.join("\n")}\n`
+          : text;
       ensureParent(path);
-      writeFileSync(path, text);
+      writeFileSync(path, body);
       if (flags.html) writeFileSync(flags.html, html);
       console.log(path);
       return;

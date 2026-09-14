@@ -40,6 +40,7 @@ node helpers/browser.mjs eval --js '
   };
   set(find("除外アプリ（1行1件）"), "Slack");
   set(find("除外サイト"), "mail.example.test");
+  set(find("タイトル非記録アプリ（1行1件）"), "Slack");
   return "filled";
 })()
 '
@@ -47,14 +48,15 @@ node helpers/browser.mjs click --text "保存"
 node helpers/browser.mjs wait --text "許可リストを保存しました"
 ```
 
-- **Confirm persistence.** Run `curl -sS -H "Authorization: Bearer $SHIFTLOG_API_TOKEN" "$SHIFTLOG_API_ORIGIN/v1/permissions"`. `apps.exclude` is `["Slack"]`, `sites.exclude` is `["mail.example.test"]`, both modes remain `exclude_listed`.
-- **Reload.** Run `goto /permissions` again. The app-exclude textarea shows `Slack` and the site-exclude textarea shows `mail.example.test`.
-- **Include-only mode.** Change `アプリモード` to `Include only（明示したアプリのみ）` via the same `eval` on the `アプリモード` `<select>` (`value` `include_only`), put `Code` in `許可のみアプリ（include_only 時）`, save, and confirm `apps.mode === "include_only"` and `apps.include_only === ["Code"]`.
-- **Proof.** Screenshot of the saved form, the permissions JSON, and a reload snapshot that still shows `Slack`. Feature id `allowlist`.
+- **Confirm persistence.** Run `curl -sS -H "Authorization: Bearer $SHIFTLOG_API_TOKEN" "$SHIFTLOG_API_ORIGIN/v1/permissions"`. `apps.exclude` is `["Slack"]`, `sites.exclude` is `["mail.example.test"]`, `title_policy.Slack` is `"app_only"`, both modes remain `exclude_listed`.
+- **Reload.** Run `goto /permissions` again. Do not trust `document.body.innerText` for the lists — it omits `<textarea>` values. Confirm via `snapshot` (`--- form fields ---` includes `Slack` and `mail.example.test`) or `eval` of each labeled `.value`.
+- **Include-only mode.** Change `アプリモード` to `Include only（明示したアプリのみ）` via the same `eval` on the `アプリモード` `<select>` (`value` `include_only`), put `Code` in `許可のみアプリ（include_only 時）`, optionally set `サイトモード` to `Include only` and `github.com` in `許可のみサイト`, save, and confirm `apps.mode === "include_only"` and `apps.include_only === ["Code"]`. `title_policy.Slack` must still be `"app_only"`.
+- **Proof.** Screenshot of the saved form, the permissions JSON, and a reload snapshot whose form-fields block still lists `Slack`. Feature id `allowlist`.
 
 ## Gotchas
 
 - Labels are the only stable names. The textareas and selects have no `name` or `aria-label`.
+- Headless Chrome `innerText` does not include `<textarea>` values. A page snapshot without the form-fields block will look empty after reload even when `.value` is `Slack`.
 - `splitLines` trims and drops blank lines. A trailing newline does not create an empty entry.
 - Saving the allowlist PUTs the full permissions object. It must not clear `enabled` / `memories_enabled` if those were already on.
 - There is no client-side validation that an include-only list is non-empty. An empty include-only list is a legal saved state; collectors would match nothing. Assert the JSON you wrote.
