@@ -3,12 +3,83 @@ import { promisify } from "node:util";
 
 const execFileAsync = promisify(execFile);
 
+export type WindowTitleMeta = {
+  file?: string;
+  project?: string;
+  cwd?: string;
+  branch?: string;
+};
+
 export type FrontWindow = {
   app: string;
   title: string;
   site?: string;
   privateBrowsing?: boolean;
+  meta?: WindowTitleMeta;
 };
+
+const EDITOR_APPS = new Set(["code", "visual studio code", "vs code", "cursor"]);
+const TERMINAL_APPS = new Set(["ghostty", "iterm2", "iterm", "terminal", "wezterm"]);
+
+function looksLikeFile(part: string): boolean {
+  return /\.[A-Za-z0-9]{1,8}$/.test(part);
+}
+
+function looksLikePath(part: string): boolean {
+  return part.startsWith("~") || part.startsWith("/") || part.includes("/");
+}
+
+function titleSegments(title: string): string[] {
+  return title
+    .split(/\s+[—–-]\s+/)
+    .map((part) => part.trim())
+    .filter(Boolean);
+}
+
+function interpretEditorTitle(title: string, app: string): WindowTitleMeta | undefined {
+  const parts = titleSegments(title).filter((part) => part.toLowerCase() !== app.toLowerCase());
+  if (parts.length === 0) return undefined;
+  if (parts.length === 1) {
+    const only = parts[0]!;
+    return looksLikeFile(only) ? { file: only } : { project: only };
+  }
+  const first = parts[0]!;
+  const last = parts[parts.length - 1]!;
+  if (looksLikeFile(last) && !looksLikeFile(first)) {
+    return { project: first, file: last };
+  }
+  if (looksLikeFile(first) && !looksLikeFile(last)) {
+    return { file: first, project: last };
+  }
+  return { project: first, file: last };
+}
+
+function interpretTerminalTitle(title: string): WindowTitleMeta | undefined {
+  const head = titleSegments(title)[0];
+  if (!head) return undefined;
+  const branched = head.match(/^(.*)\s+\(([^)]+)\)\s*$/);
+  if (branched) {
+    const cwd = branched[1]!.trim();
+    const branch = branched[2]!.trim();
+    if (!cwd || (!looksLikePath(cwd) && cwd.includes("."))) return undefined;
+    return { cwd, ...(branch ? { branch } : {}) };
+  }
+  if (looksLikePath(head)) return { cwd: head };
+  return undefined;
+}
+
+export function interpretWindowTitle(app: string, title: string): WindowTitleMeta | undefined {
+  const key = app.trim().toLowerCase();
+  if (!title.trim()) return undefined;
+  if (EDITOR_APPS.has(key)) return interpretEditorTitle(title, app);
+  if (TERMINAL_APPS.has(key)) return interpretTerminalTitle(title);
+  return undefined;
+}
+
+function withTitleMeta(front: FrontWindow): FrontWindow {
+  const meta = interpretWindowTitle(front.app, front.title);
+  return meta ? { ...front, meta } : front;
+}
 
 export type ExecFileFn = (
   file: string,
@@ -79,7 +150,7 @@ async function observeMac(exec: ExecFileFn): Promise<FrontWindow | null> {
   } catch {
     // Automation permission denied — fall back to title heuristic.
   }
-  return { app, title, site };
+  return withTitleMeta({ app, title, site });
 }
 
 async function observeLinux(exec: ExecFileFn): Promise<FrontWindow | null> {
@@ -94,11 +165,11 @@ async function observeLinux(exec: ExecFileFn): Promise<FrontWindow | null> {
     const title = nameOut.stdout.trim();
     const app = (classOut.stdout.trim() || title.split("—").pop() || title || "unknown").trim();
     if (!app && !title) return null;
-    return {
+    return withTitleMeta({
       app: app || "unknown",
       title,
       site: siteFromTitle(title, app),
-    };
+    });
   } catch {
     // xdotool missing — try xprop
   }
@@ -111,7 +182,7 @@ async function observeLinux(exec: ExecFileFn): Promise<FrontWindow | null> {
     const nameMatch = props.stdout.match(/WM_NAME\(.*?\) = "([^"]*)"/);
     const app = (classMatch?.[2] || classMatch?.[1] || "unknown").trim();
     const title = (nameMatch?.[1] ?? "").trim();
-    return { app, title, site: siteFromTitle(title, app) };
+    return withTitleMeta({ app, title, site: siteFromTitle(title, app) });
   } catch {
     return null;
   }

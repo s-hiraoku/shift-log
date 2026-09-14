@@ -95,6 +95,7 @@ export async function summarizeTenMinuteWindow(
       skill_candidate_reason: skill.skill_candidate_reason,
       apps_dwell: aggregate.apps_dwell,
       sites: aggregate.sites,
+      ...(aggregate.projects.length > 0 ? { projects: aggregate.projects } : {}),
       top_app: aggregate.top_app,
       entities,
     },
