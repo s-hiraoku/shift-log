@@ -80,6 +80,8 @@ Linux 収集には `xdotool`（なければ `xprop`）が必要です。
 
 ### macOS（launchd）
 
+新規マシンでは README のワンライナーで入れます。`scripts/install.sh` が `~/.local/share/shiftlog/src` へ clone し、`pnpm setup:launchd` まで実行します。更新は同じスクリプトの `update` です。DB / `.env` / キーチェーンは消しません。
+
 `packaging/macos/*.plist` はそのままでは動きません。`pnpm` は launchd の PATH に無く、API の `start` は `node dist/server.js` なので先に `pnpm build` が必要です。次のコマンドが両方をやります。
 
 ```bash
