@@ -33,7 +33,9 @@ curl -sS -X POST "$SHIFTLOG_API_ORIGIN/v1/agent/continue" \
   -d '{"prompt":"続きやって","limit":12}'
 ```
 
-Exit 0. JSON has `mode` exactly `context_only`, `prompt` exactly `続きやって`, a `memories` array with the demo titles, each item `matched_by` `recent` or `keyword`, and a `note` that says context only / do not operate the computer.
+Exit 0. JSON has `mode` exactly `context_only`, `prompt` exactly `続きやって`, a `memories` array with the demo titles, each item `matched_by` `recent` or `keyword`, and a `note` that says context only / do not operate the computer. `続き` / `やって` are stopwords, so this prompt tags every row `recent`.
+
+- **Keyword.** POST the same URL with `{"prompt":"Safari","limit":12}`. At least one memory has `matched_by` `keyword` (the Safari demo row). Other demo rows stay `recent`.
 
 - **Range miss.** After seed, GET `$SHIFTLOG_API_ORIGIN/v1/timeline?since=2099-01-01T00:00:00.000Z&until=2099-01-01T01:00:00.000Z`. `items` is `[]`. POST continue with the same `since` / `until` also returns `memories: []`.
 
