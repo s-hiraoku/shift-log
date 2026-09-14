@@ -31,5 +31,8 @@ setInterval(() => {
 }, sweepMs).unref();
 
 const port = Number(process.env.PORT ?? 8787);
-console.log(`ShiftLog API listening on http://localhost:${port}`);
-serve({ fetch: app.fetch, port });
+// hostname 未指定だと Node は 0.0.0.0 / :: を掴み、収集した行動履歴が同一 LAN から読める。
+// 既定はループバックに閉じ、公開したい運用者だけが SHIFTLOG_BIND_HOST で広げる。
+const hostname = process.env.SHIFTLOG_BIND_HOST ?? "127.0.0.1";
+console.log(`ShiftLog API listening on http://${hostname}:${port}`);
+serve({ fetch: app.fetch, port, hostname });

@@ -44,7 +44,7 @@ Cursor などではリポジトリの Skill を有効化するか、`skills/shif
 
 ## インストール（macOS）
 
-Git と Node.js 20 以降が必要です。ワンライナーはソースを `~/.local/share/shiftlog/src` に置き、`pnpm setup:launchd` まで実行します。SQLite は `~/.local/share/shiftlog/shiftlog.db` に残ります。
+Git と Node.js 20 以降（同梱の npm を使います）が必要です。pnpm は事前に入れなくてよく、`package.json` の `packageManager` で固定した版を `~/.local/share/shiftlog/toolchain` へ取り寄せます。グローバルの pnpm は変更しません。ワンライナーはソースを `~/.local/share/shiftlog/src` に置き、この 1 台だけのランダムな API トークンを `.env` に書いてキーチェーンへ登録し、`pnpm setup:launchd` まで実行します。SQLite は `~/.local/share/shiftlog/shiftlog.db` に残ります。API はループバック（`127.0.0.1:8787`）のみで待ち受けます。
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/s-hiraoku/shift-log/main/scripts/install.sh | bash

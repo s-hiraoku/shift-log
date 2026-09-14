@@ -38,6 +38,7 @@ pnpm --filter @shift-log/desktop collect
 | `SHIFTLOG_DATA_DIR` | 自前ホスト | SQLite。未設定時は `~/.local/share/shiftlog`。相対パスはリポジトリルート基準 |
 | `DATABASE_URL` | Vercel では必須 | `postgres://` / `postgresql://` |
 | `CRON_SECRET` | Vercel Cron | `/internal/cron/purge` の共有秘密 |
+| `SHIFTLOG_BIND_HOST` | 任意 | 自前ホストの待ち受けアドレス。既定 `127.0.0.1`（ループバックのみ）。他の端末から API を叩くときだけ `0.0.0.0` |
 | `SHIFTLOG_CORS_ORIGINS` | 任意 | カンマ区切り。未設定は `*` |
 | `SHIFTLOG_RATE_LIMIT_PER_MIN` | 任意 | 既定 60 |
 | `SHIFTLOG_MAX_UPLOAD_BYTES` | 任意 | 既定 512000 |
@@ -80,7 +81,11 @@ Linux 収集には `xdotool`（なければ `xprop`）が必要です。
 
 ### macOS（launchd）
 
-新規マシンでは README のワンライナーで入れます。`scripts/install.sh` が `~/.local/share/shiftlog/src` へ clone し、`pnpm setup:launchd` まで実行します。更新は同じスクリプトの `update` です。DB / `.env` / キーチェーンは消しません。
+新規マシンでは README のワンライナーで入れます。`scripts/install.sh` が `~/.local/share/shiftlog/src` へ clone し、`.env` にこの 1 台だけのランダムトークンを書き、キーチェーンへ登録して `pnpm setup:launchd` まで実行します。更新は同じスクリプトの `update` です。DB / `.env` / キーチェーンは消しません。
+
+pnpm は事前インストール不要です。PATH の pnpm が `package.json` の `packageManager` と一致しないと pnpm 自身がバージョン不一致で終了するため、一致しないときだけ node 同梱の npm で固定版を `~/.local/share/shiftlog/toolchain/pnpm-<version>` へ取り寄せ、その実行中だけ PATH の先頭に置きます。グローバルの pnpm や corepack の状態は変更しません。
+
+`.env` が既にあるときは書き換えません。中身が `.env.example` の公開値 `dev-token` のままだと警告を出すので、その場合は手で置き換えてから `pnpm --filter @shift-log/desktop credentials set` をやり直してください。
 
 `packaging/macos/*.plist` はそのままでは動きません。`pnpm` は launchd の PATH に無く、API の `start` は `node dist/server.js` なので先に `pnpm build` が必要です。次のコマンドが両方をやります。
 
