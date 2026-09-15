@@ -26,7 +26,7 @@ Ready when:
 - API `GET $SHIFTLOG_API_ORIGIN/health` returns `{"ok":true,"service":"shift-log-api"}` (log line: `ShiftLog API listening on http://localhost:<port>`).
 - Web `GET $WEB_ORIGIN/` contains `ShiftLog`.
 
-Env the helper sets (do not inherit `DATABASE_URL`):
+Env the helper sets (do not inherit `DATABASE_URL` or `SHIFTLOG_LLM_API_KEY`):
 
 | Variable | Role |
 | --- | --- |
@@ -35,6 +35,8 @@ Env the helper sets (do not inherit `DATABASE_URL`):
 | `SHIFTLOG_DATA_DIR` | SQLite at `$SHIFTLOG_DATA_DIR/shiftlog.db`. |
 | `PORT` | API listen port. |
 | `SHIFTLOG_RATE_LIMIT_PER_MIN` | `300` for this instance so a drive does not 429 (product default is `60`). |
+
+Launch also `unset`s `SHIFTLOG_LLM_API_KEY` so demo titles stay on the deterministic template.
 
 Teardown is `helpers/cleanup.sh`. Two verification instances can run side by side if each has its own ports, data dir, and token. Do not point two webs at one API if either will mutate history.
 
@@ -91,7 +93,7 @@ Stable handles observed in `apps/web` (Japanese UI, `lang=ja`):
 | Control | Handle |
 | --- | --- |
 | Nav | links `ホーム` `/`, `設定` `/settings`, `許可リスト` `/permissions`, `タイムライン` `/timeline` |
-| Home seed | button `有効化してデモデータを投入` (busy label `処理中…`) |
+| Home seed | button `有効化してデモデータを投入` (busy label `処理中…`; status `デモデータを投入中…`) |
 | Home after seed | status `準備完了: windows=N, memories=N. タイムラインを開いてください。` |
 | Home badges | `デフォルトオフ` → `収集オン` after both `enabled` and `memories_enabled`. Static `screenshots: off` and `keylog: forbidden` stay on home. |
 | Home jumps | links `タイムラインへ`, `設定へ`. Settings has no `タイムラインへ` (use nav `タイムライン`). |

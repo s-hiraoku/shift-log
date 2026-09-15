@@ -36,8 +36,9 @@ if [[ -f "$NEXT_ENV_FILE" ]]; then
   cp "$NEXT_ENV_FILE" "$STATE_DIR/next-env.d.ts.bak"
 fi
 
-# Isolation: never inherit a shared Postgres URL or the repo ./data directory.
-unset DATABASE_URL VITEST
+# Isolation: never inherit a shared Postgres URL, the repo ./data directory,
+# or an LLM key that would make demo titles non-deterministic.
+unset DATABASE_URL VITEST SHIFTLOG_LLM_API_KEY
 export SHIFTLOG_PERSIST=1
 export SHIFTLOG_DATA_DIR="$STATE_DIR/data"
 export SHIFTLOG_API_TOKEN="$TOKEN"
@@ -47,7 +48,7 @@ export PORT="$API_PORT"
 export SHIFTLOG_CORS_ORIGINS="http://127.0.0.1:${WEB_PORT},http://localhost:${WEB_PORT}"
 
 echo "verify-shift-log: starting API on :$API_PORT (data=$SHIFTLOG_DATA_DIR)" >&2
-setsid env -u DATABASE_URL -u VITEST \
+setsid env -u DATABASE_URL -u VITEST -u SHIFTLOG_LLM_API_KEY \
   PORT="$API_PORT" \
   SHIFTLOG_API_TOKEN="$TOKEN" \
   SHIFTLOG_DATA_DIR="$SHIFTLOG_DATA_DIR" \
