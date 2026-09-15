@@ -35,6 +35,6 @@ Preconditions:
 
 - Checkbox labels wrap a `<span class="row">`. Click the label text via `check --text`, not coordinates.
 - `保存` and `デモデータを投入` are both unlabeled `button`s. Match on exact visible text.
-- History delete is immediate and has no confirm dialog. Prefer `全部` on a disposable instance. `直近十分` / `一時間` / `一日` only remove memories whose `window_start` falls in that window — demo rows from 12–40 minutes ago may survive `直近十分`.
+- History delete is immediate and has no confirm dialog. Prefer `全部` on a disposable instance. Scoped deletes keep a row when `window_end` is before the cutoff (overlap on interval end, not `window_start`). Demo rows start ~40 / ~25 / ~12 minutes ago and each lasts 10 minutes, so `直近十分` removes Safari (`~12 min`) and leaves Code / Terminal.
 - Enabling collection without `Memories 相当を有効化（必須）` still shows `デフォルトオフ` on home.
 - Do not treat the static `screenshots: off` badges as proof that a toggle saved; they never change.
