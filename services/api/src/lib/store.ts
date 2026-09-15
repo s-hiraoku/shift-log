@@ -46,7 +46,7 @@ function scopeCutoff(scope: DeleteScope, now = new Date()): Date | null {
     case "last_hour":
       return new Date(now.getTime() - 60 * 60 * 1000);
     case "last_day":
-      return new Date(now.getTime() - 24 * 60 * 1000);
+      return new Date(now.getTime() - 24 * 60 * 60 * 1000);
     case "all":
       return null;
   }
