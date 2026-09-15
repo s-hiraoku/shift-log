@@ -262,6 +262,40 @@ describe("MemoryStore deleteByScope overlap", () => {
     expect(store.memories.has("older-six-hour")).toBe(true);
     expect(store.windows.has("cross-cutoff")).toBe(false);
   });
+
+  it("treats last_day as 24 hours, so a 2h memory is deleted and a 25h memory remains", () => {
+    const store = new MemoryStore();
+    const now = new Date("2026-08-30T12:00:00.000Z");
+    const put = (id: string, start: string, end: string) => {
+      store.putMemory({
+        id,
+        created_at: end,
+        updated_at: end,
+        front_matter: {
+          title: id,
+          description: id,
+          apps: ["Code"],
+          device: "desk",
+          window_start: start,
+          window_end: end,
+          kind: "ten_minute",
+          window_ids: [id],
+          skill_candidate: false,
+        },
+        body: id,
+      });
+    };
+
+    put("two-hours-ago", "2026-08-30T09:50:00.000Z", "2026-08-30T10:00:00.000Z");
+    put("twenty-three-hours-ago", "2026-08-29T12:50:00.000Z", "2026-08-29T13:00:00.000Z");
+    put("twenty-five-hours-ago", "2026-08-29T10:50:00.000Z", "2026-08-29T11:00:00.000Z");
+
+    const result = store.deleteByScope("last_day", now);
+    expect(result.deleted_memories).toBe(2);
+    expect(store.memories.has("two-hours-ago")).toBe(false);
+    expect(store.memories.has("twenty-three-hours-ago")).toBe(false);
+    expect(store.memories.has("twenty-five-hours-ago")).toBe(true);
+  });
 });
 
 
