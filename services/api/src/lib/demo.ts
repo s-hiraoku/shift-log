@@ -163,7 +163,7 @@ export async function seedDemoData(
   let windows = 0;
   for (const raw of samples) {
     if (store.windows.has(raw.metadata.window_id)) continue;
-    const upload = sanitizeWindowUpload(raw);
+    const upload = sanitizeWindowUpload(raw, store.permissions);
     const stored = store.putWindow(upload);
     if (!stored) continue;
     await summarizeTenMinuteWindow(store, upload);
