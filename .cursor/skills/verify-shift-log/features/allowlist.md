@@ -59,5 +59,6 @@ node helpers/browser.mjs wait --text "許可リストを保存しました"
 - Headless Chrome `innerText` does not include `<textarea>` values. A page snapshot without the form-fields block will look empty after reload even when `.value` is `Slack`.
 - `splitLines` trims and drops blank lines. A trailing newline does not create an empty entry.
 - Saving the allowlist PUTs the full permissions object. It must not clear `enabled` / `memories_enabled` if those were already on.
+- `title_policy` is rebuilt from `タイトル非記録アプリ` on each save, not merged. Clearing that textarea and saving drops `app_only` entries.
 - There is no client-side validation that an include-only list is non-empty. An empty include-only list is a legal saved state; collectors would match nothing. Assert the JSON you wrote.
 - Private browsing is not listed here. Do not invent a checkbox for it.
