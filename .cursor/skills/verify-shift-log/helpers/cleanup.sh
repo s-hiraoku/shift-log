@@ -39,6 +39,11 @@ stop_pid api "${API_PID:-}"
 
 # Revert Next dest side effects in the repo (not evidence).
 if [[ -n "${REPO_ROOT:-}" && -d "$REPO_ROOT/apps/web" ]]; then
+  # Isolated distDir from launch.sh — never delete the user session's .next.
+  if [[ "${SHIFTLOG_NEXT_DIST_DIR:-}" == .next-verify-* ]]; then
+    rm -rf "$REPO_ROOT/apps/web/$SHIFTLOG_NEXT_DIST_DIR"
+    echo "cleanup: removed apps/web/$SHIFTLOG_NEXT_DIST_DIR"
+  fi
   if [[ -n "${NEXT_ENV_BACKUP:-}" && -f "$NEXT_ENV_BACKUP" ]]; then
     cp "$NEXT_ENV_BACKUP" "$REPO_ROOT/apps/web/next-env.d.ts"
     echo "cleanup: restored apps/web/next-env.d.ts"

@@ -1,6 +1,7 @@
 {
   "name": "ShiftLog",
-  "install": "corepack enable && pnpm install --frozen-lockfile && pnpm --filter @shift-log/schema build",
+  "install": "corepack enable && pnpm install --frozen-lockfile && pnpm --filter @shift-log/schema build && ./scripts/ensure-dev-env.sh",
+  "start": "./scripts/ensure-dev-env.sh",
   "terminals": [
     {
       "name": "api",

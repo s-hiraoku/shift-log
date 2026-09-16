@@ -26,6 +26,8 @@ Ready when:
 - API `GET $SHIFTLOG_API_ORIGIN/health` returns `{"ok":true,"service":"shift-log-api"}` (log line: `ShiftLog API listening on http://localhost:<port>`).
 - Web `GET $WEB_ORIGIN/` contains `ShiftLog`.
 
+`next dev` (16.3+) locks one process per `distDir` (`.next/dev/lock`). Launch sets `SHIFTLOG_NEXT_DIST_DIR=.next-verify-<run-id>` so an isolated web can run next to the documented user session on `:3000`. Cleanup deletes that directory only (never `apps/web/.next`).
+
 Env the helper sets (do not inherit `DATABASE_URL` or `SHIFTLOG_LLM_API_KEY`):
 
 | Variable | Role |
