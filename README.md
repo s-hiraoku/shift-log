@@ -157,7 +157,7 @@ Web UI は `/api/*` の Route Handler 経由で API を呼び、Bearer トーク
 - API: `services/api` を別プロジェクトにし、`api/index.ts` をエントリに使用
 - またはルートの `vercel.json` で API ルートを紐付け
 
-Vercel + Postgres（Neon など）では、ウィンドウタイトルに含まれる業務情報（Slack のチャンネル名、社内ツールの案件名など）が社外のデータベースに保存されます。社内情報を扱う場合はセルフホスト（SQLite は `~/.local/share/shiftlog/shiftlog.db`、ファイル権限 0600）にしてください。タイトルを落としてアプリ名だけ残す `app_only`（#41）は未実装です。
+Vercel + Postgres（Neon など）では、ウィンドウタイトルに含まれる業務情報（Slack のチャンネル名、社内ツールの案件名など）が社外のデータベースに保存されます。社内情報を扱う場合はセルフホスト（SQLite は `~/.local/share/shiftlog/shiftlog.db`、ファイル権限 0600）にするか、許可リストの「タイトル非記録アプリ」で `app_only`（#41）を指定してください。滞在時間は残し、チャンネル名などはコレクタが送る前に落とします。
 
 ## テスト
 
