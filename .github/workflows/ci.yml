@@ -20,5 +20,4 @@ jobs:
       - run: pnpm --filter @shift-log/schema build
       - run: pnpm -r run test
       - run: node --test scripts/*.test.mjs
-      - run: pnpm --filter @shift-log/api typecheck
-      - run: pnpm --filter @shift-log/desktop typecheck
+      - run: pnpm typecheck
