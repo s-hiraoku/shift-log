@@ -1,6 +1,7 @@
 node_modules
 dist
 .next
+.next-verify*
 .turbo
 .vercel
 *.log
