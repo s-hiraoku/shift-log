@@ -10,6 +10,7 @@ The allowlist page sets per-app and per-site exclude/include lists. Private brow
 - `allowlist-site-exclude` persists hostnames in `除外サイト`.
 - `allowlist-save` shows `許可リストを保存しました` and reloads the same values.
 - `allowlist-app-title-only` persists one app name per line in `タイトル非記録アプリ（1行1件）` as `title_policy[app] = "app_only"`.
+- `allowlist-load-error` leaves `読み込み中…` and shows the API error plus `再読み込み` when `GET /v1/permissions` fails.
 
 ## How to get to it (user POV)
 
@@ -62,3 +63,4 @@ node helpers/browser.mjs wait --text "許可リストを保存しました"
 - `title_policy` is rebuilt from `タイトル非記録アプリ` on each save, not merged. Clearing that textarea and saving drops `app_only` entries.
 - There is no client-side validation that an include-only list is non-empty. An empty include-only list is a legal saved state; collectors would match nothing. Assert the JSON you wrote.
 - Private browsing is not listed here. Do not invent a checkbox for it.
+- A failed `GET /v1/permissions` must not stay on `読み込み中…`. Wait for `再読み込み` (and the error text). Clicking it retries the same GET.
