@@ -4,9 +4,11 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import type { MemoryRecord } from "@shift-log/schema";
 import { apiFetch } from "@/lib/api";
+import { timelineEmptyMessage } from "@/lib/timeline";
 
 export default function TimelinePage() {
   const [q, setQ] = useState("");
+  const [submittedQuery, setSubmittedQuery] = useState("");
   const [items, setItems] = useState<MemoryRecord[]>([]);
   const [error, setError] = useState("");
 
@@ -17,6 +19,7 @@ export default function TimelinePage() {
         : "/v1/timeline";
       const data = await apiFetch<{ items: MemoryRecord[] }>(path);
       setItems(data.items);
+      setSubmittedQuery(query);
       setError("");
     } catch (e) {
       setError(String(e));
@@ -51,7 +54,7 @@ export default function TimelinePage() {
       <section className="card">
         <ul className="clean">
           {items.length === 0 ? (
-            <li className="muted">まだ記憶がありません。収集を有効化して窓をアップロードしてください。</li>
+            <li className="muted">{timelineEmptyMessage(submittedQuery)}</li>
           ) : (
             items.map((m) => (
               <li key={m.id}>
