@@ -41,12 +41,17 @@ alive() {
 
 # Replace the current process with argv in a new session so cleanup can
 # `kill -- -$pid`. GNU setsid is missing on macOS; Python's os.setsid is not.
+# If this process is already a group leader (job-control background), setsid
+# raises EPERM — ignore it; pgid still equals pid so `kill -- -$pid` works.
 exec_in_new_session() {
   if command -v setsid >/dev/null 2>&1; then
     exec setsid "$@"
   fi
   exec python3 -c 'import os, sys
-os.setsid()
+try:
+    os.setsid()
+except OSError:
+    pass
 os.execvp(sys.argv[1], sys.argv[1:])
 ' "$@"
 }

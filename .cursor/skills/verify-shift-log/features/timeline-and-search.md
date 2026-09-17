@@ -30,7 +30,7 @@ Preconditions:
 - **Title/app match.** Run `node helpers/browser.mjs fill --placeholder "検索（タイトル・本文・アプリ）" --value "Code"` then `click --text "検索"`. Wait until `Code / Chrome — 10分サマリ` is visible and `Safari — 10分サマリ` is not. Second view: `curl -sS -H "Authorization: Bearer $SHIFTLOG_API_TOKEN" "$SHIFTLOG_API_ORIGIN/v1/search?q=Code"` — every `items[].front_matter.apps` or title/body contains `Code`.
 - **Body match.** Replace the query with `pnpm test` (demo dual-window summary includes `Ran pnpm test`). Run `fill --placeholder "検索（タイトル・本文・アプリ）" --value "pnpm test"` and `click --text "検索"`. `Terminal / Slack — 10分サマリ` remains.
 - **Miss.** Run `fill --placeholder "検索（タイトル・本文・アプリ）" --value "volcano"` and `click --text "検索"`. The list shows `「volcano」に一致する記憶はありません。` API `q=volcano` returns `"items":[]`.
-- **Open detail.** Clear back to a match, then `click --text "Code / Chrome — 10分サマリ"`. Heading is that title. Section `Markdown 記憶` contains `## Focus span` and a line mentioning `Code`. Demo Code / Terminal YAML includes `projects: ["shift-log"]`. Back link `← タイムライン` returns to `/timeline`.
+- **Open detail.** Clear back to a match, then `click --text "Code / Chrome — 10分サマリ"`. Heading is that title. Section `Markdown 記憶` contains `## Focus span` and a line mentioning `Code`. Demo Code / Terminal YAML includes `projects: ["shift-log"]`. Loaded-state back link `← タイムライン` returns to `/timeline`. The fetch-error card uses `タイムラインへ戻る` instead — do not wait for that string on a successful open.
 - **Proof.** Snapshot + screenshot of the `Code` search results, plus the search JSON. Record feature id `timeline-and-search` and the entry used (`検索` button vs Enter).
 
 ## Gotchas
@@ -41,3 +41,4 @@ Preconditions:
 - A search miss is not the unseeded empty copy. Wait for `に一致する記憶はありません` (or the quoted query) before treating the list as empty-of-hits.
 - React controlled inputs ignore a raw `.value =` assignment. The helper uses the native value setter; do not replace it with a naive DOM write.
 - Memory ids look like `mem_demo_desk_<iso>`. Do not hard-code an id from a previous run.
+- A successful detail page shows `← タイムライン`. `タイムラインへ戻る` appears only on the fetch-error card.
