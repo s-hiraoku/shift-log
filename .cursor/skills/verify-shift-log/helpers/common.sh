@@ -39,6 +39,18 @@ alive() {
   [[ -n "$pid" ]] && kill -0 "$pid" 2>/dev/null
 }
 
+# Replace the current process with argv in a new session so cleanup can
+# `kill -- -$pid`. GNU setsid is missing on macOS; Python's os.setsid is not.
+exec_in_new_session() {
+  if command -v setsid >/dev/null 2>&1; then
+    exec setsid "$@"
+  fi
+  exec python3 -c 'import os, sys
+os.setsid()
+os.execvp(sys.argv[1], sys.argv[1:])
+' "$@"
+}
+
 port_in_use() {
   local port="$1"
   python3 - "$port" <<'PY'

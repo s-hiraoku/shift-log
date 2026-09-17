@@ -51,7 +51,7 @@ export PORT="$API_PORT"
 export SHIFTLOG_CORS_ORIGINS="http://127.0.0.1:${WEB_PORT},http://localhost:${WEB_PORT}"
 
 echo "verify-shift-log: starting API on :$API_PORT (data=$SHIFTLOG_DATA_DIR)" >&2
-setsid env -u DATABASE_URL -u VITEST -u SHIFTLOG_LLM_API_KEY \
+exec_in_new_session env -u DATABASE_URL -u VITEST -u SHIFTLOG_LLM_API_KEY \
   PORT="$API_PORT" \
   SHIFTLOG_API_TOKEN="$TOKEN" \
   SHIFTLOG_DATA_DIR="$SHIFTLOG_DATA_DIR" \
@@ -62,7 +62,7 @@ setsid env -u DATABASE_URL -u VITEST -u SHIFTLOG_LLM_API_KEY \
 API_PID=$!
 
 echo "verify-shift-log: starting web on :$WEB_PORT -> $SHIFTLOG_API_ORIGIN (distDir=$NEXT_DIST_DIR)" >&2
-setsid env \
+exec_in_new_session env \
   NEXT_TELEMETRY_DISABLED=1 \
   SHIFTLOG_API_ORIGIN="$SHIFTLOG_API_ORIGIN" \
   SHIFTLOG_API_TOKEN="$TOKEN" \
