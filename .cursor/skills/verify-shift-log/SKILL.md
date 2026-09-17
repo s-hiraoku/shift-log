@@ -134,7 +134,7 @@ Proof standards:
 .cursor/skills/verify-shift-log/helpers/cleanup.sh
 ```
 
-Stops only the process groups for `CHROME_PID`, `WEB_PID`, and `API_PID` from the state file (SIGTERM, then SIGKILL). Launch starts API/web with `setsid` so children (`tsx watch`, `next dev`) die with the recorded PID. Removes `$STATE_DIR` (logs, SQLite, Chrome profile) and restores `apps/web/next-env.d.ts` plus any Next-generated `AGENTS.md` / `CLAUDE.md`. Leaves `$EVIDENCE_DIR`. After cleanup, confirm the evidence files still exist.
+Stops only the process groups for `CHROME_PID`, `WEB_PID`, and `API_PID` from the state file (SIGTERM, then SIGKILL). Launch starts API/web in a new session (`setsid`, or Python `os.setsid` on macOS) so children (`tsx watch`, `next dev`) die with the recorded PID. Removes `$STATE_DIR` (logs, SQLite, Chrome profile) and restores `apps/web/next-env.d.ts` plus any Next-generated `AGENTS.md` / `CLAUDE.md`. Leaves `$EVIDENCE_DIR`. After cleanup, confirm the evidence files still exist.
 
 Do not `pkill -f next` / `pkill -f tsx` / kill-by-name.
 

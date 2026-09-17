@@ -15,7 +15,7 @@ stop_pid() {
     return
   fi
   echo "cleanup: stopping $name pid $pid (process group)"
-  # launch.sh starts each service with setsid, so -$pid is the group.
+  # launch.sh starts each service in a new session (setsid / os.setsid), so -$pid is the group.
   if alive "$pid"; then
     kill -- "-$pid" 2>/dev/null || kill "$pid" 2>/dev/null || true
   else
