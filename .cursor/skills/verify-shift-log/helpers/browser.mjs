@@ -37,7 +37,10 @@ function die(msg) {
 }
 
 function loadState() {
-  const file = process.env.SHIFTLOG_VERIFY_STATE || "/tmp/shiftlog-verify-current";
+  const file =
+    process.env.SHIFTLOG_VERIFY_STATE ||
+    process.env.SHIFTLOG_VERIFY_CURRENT ||
+    "/tmp/shiftlog-verify-current";
   if (!existsSync(file)) die(`no state file at ${file}. Run helpers/launch.sh first.`);
   const env = {};
   for (const line of readFileSync(file, "utf8").split("\n")) {

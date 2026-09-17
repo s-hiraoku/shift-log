@@ -7,6 +7,8 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck disable=SC1091
 source "$SCRIPT_DIR/common.sh"
 load_state
+# Node helpers read the state file, not the bash exports from load_state.
+export SHIFTLOG_VERIFY_STATE="$(state_file)"
 
 BROWSER=(node "$SCRIPT_DIR/browser.mjs")
 FEATURE_DIR="$EVIDENCE_DIR/home-enable-and-seed"

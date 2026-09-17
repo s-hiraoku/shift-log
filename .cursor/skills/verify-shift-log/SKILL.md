@@ -143,7 +143,7 @@ Do not `pkill -f next` / `pkill -f tsx` / kill-by-name.
 
 ## Helpers
 
-All scripts are executable. `launch.sh` prints the state file path on stdout; other helpers read `SHIFTLOG_VERIFY_STATE` or `/tmp/shiftlog-verify-current`.
+All scripts are executable. `launch.sh` prints the state file path on stdout; other helpers read `SHIFTLOG_VERIFY_STATE`, then `SHIFTLOG_VERIFY_CURRENT` (default `/tmp/shiftlog-verify-current`). Set `SHIFTLOG_VERIFY_CURRENT` to a unique path when another verify run might own the default symlink. `browser.mjs` honors the same two variables.
 
 | Command | What it does |
 | --- | --- |
