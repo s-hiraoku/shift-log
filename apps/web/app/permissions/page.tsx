@@ -3,6 +3,10 @@
 import { useEffect, useState } from "react";
 import type { PermissionsConfig } from "@shift-log/schema";
 import { apiFetch } from "@/lib/api";
+import {
+  PERMISSIONS_RETRY_LABEL,
+  permissionsLoadPhase,
+} from "@/lib/permissions-ui";
 
 function splitLines(text: string): string[] {
   return text
@@ -19,9 +23,12 @@ export default function PermissionsPage() {
   const [sitesExclude, setSitesExclude] = useState("");
   const [sitesInclude, setSitesInclude] = useState("");
   const [status, setStatus] = useState("");
+  const [loadError, setLoadError] = useState("");
 
-  useEffect(() => {
-    apiFetch<PermissionsConfig>("/v1/permissions").then((c) => {
+  async function load() {
+    setLoadError("");
+    try {
+      const c = await apiFetch<PermissionsConfig>("/v1/permissions");
       setConfig(c);
       setAppsExclude(c.apps.exclude.join("\n"));
       setAppsInclude(c.apps.include_only.join("\n"));
@@ -33,7 +40,14 @@ export default function PermissionsPage() {
       );
       setSitesExclude(c.sites.exclude.join("\n"));
       setSitesInclude(c.sites.include_only.join("\n"));
-    });
+    } catch (e) {
+      setLoadError(String(e));
+    }
+  }
+
+  useEffect(() => {
+    void load();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   async function save() {
@@ -56,14 +70,36 @@ export default function PermissionsPage() {
       },
       title_policy,
     };
-    const saved = await apiFetch<PermissionsConfig>("/v1/permissions", {
-      method: "PUT",
-      body: JSON.stringify(next),
-    });
-    setConfig(saved);
-    setStatus("許可リストを保存しました");
+    setStatus("保存中…");
+    try {
+      const saved = await apiFetch<PermissionsConfig>("/v1/permissions", {
+        method: "PUT",
+        body: JSON.stringify(next),
+      });
+      setConfig(saved);
+      setStatus("許可リストを保存しました");
+    } catch (e) {
+      setStatus(String(e));
+    }
   }
 
+  const phase = permissionsLoadPhase(config, loadError);
+
+  if (phase === "error") {
+    return (
+      <div className="stack">
+        <section className="card stack">
+          <h1>許可リスト</h1>
+          <p className="muted">{loadError}</p>
+          <button type="button" onClick={() => void load()}>
+            {PERMISSIONS_RETRY_LABEL}
+          </button>
+        </section>
+      </div>
+    );
+  }
+
+  if (phase === "loading") return <p className="muted">読み込み中…</p>;
   if (!config) return <p className="muted">読み込み中…</p>;
 
   return (
