@@ -130,7 +130,7 @@ export function createApp() {
       return c.json({ error: "invalid_json" }, 400);
     }
     const parsed = WindowUploadSchema.parse(body);
-    const upload = sanitizeWindowUpload(parsed);
+    const upload = sanitizeWindowUpload(parsed, store.permissions);
     store.purgeExpiredRawEvents();
 
     if (isRawWindowExpired(upload.metadata)) {
