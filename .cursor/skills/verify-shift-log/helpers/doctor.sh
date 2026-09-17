@@ -57,6 +57,13 @@ else
   ok "isolated ports api=$API_PORT web=$WEB_PORT"
 fi
 
+chrome_bin="$(node "$SCRIPT_DIR/browser.mjs" chrome-path 2>/dev/null || true)"
+if [[ -n "$chrome_bin" && -e "$chrome_bin" ]]; then
+  ok "chrome $chrome_bin"
+else
+  bad "no Chrome/Chromium binary (set CHROME_PATH or install Google Chrome)"
+fi
+
 echo "---"
 echo "RUN_ID=$RUN_ID"
 echo "WEB_ORIGIN=$WEB_ORIGIN"

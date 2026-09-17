@@ -1,8 +1,10 @@
 #!/usr/bin/env node
 /**
  * Chrome DevTools Protocol driver for verify-shift-log.
- * Uses the system google-chrome binary. No extra npm packages.
+ * Uses the system Chrome/Chromium binary (Linux paths or macOS app bundles).
+ * No extra npm packages. Override with CHROME_PATH.
  *
+ *   node browser.mjs chrome-path
  *   node browser.mjs start
  *   node browser.mjs goto /
  *   node browser.mjs click --text "有効化してデモデータを投入"
@@ -23,6 +25,10 @@ const CHROME_CANDIDATES = [
   "/opt/google/chrome/chrome",
   "/usr/bin/chromium-browser",
   "/usr/bin/chromium",
+  "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
+  "/Applications/Chromium.app/Contents/MacOS/Chromium",
+  "/Applications/Microsoft Edge.app/Contents/MacOS/Microsoft Edge",
+  "/Applications/Brave Browser.app/Contents/MacOS/Brave Browser",
 ].filter(Boolean);
 
 function die(msg) {
@@ -31,7 +37,10 @@ function die(msg) {
 }
 
 function loadState() {
-  const file = process.env.SHIFTLOG_VERIFY_STATE || "/tmp/shiftlog-verify-current";
+  const file =
+    process.env.SHIFTLOG_VERIFY_STATE ||
+    process.env.SHIFTLOG_VERIFY_CURRENT ||
+    "/tmp/shiftlog-verify-current";
   if (!existsSync(file)) die(`no state file at ${file}. Run helpers/launch.sh first.`);
   const env = {};
   for (const line of readFileSync(file, "utf8").split("\n")) {
@@ -82,7 +91,9 @@ function chromeBin() {
   for (const p of CHROME_CANDIDATES) {
     if (existsSync(p)) return p;
   }
-  die("no Chrome/Chromium binary found");
+  die(
+    "no Chrome/Chromium binary found. Set CHROME_PATH or install Google Chrome (macOS: /Applications/Google Chrome.app).",
+  );
 }
 
 async function fetchJson(url) {
@@ -264,7 +275,11 @@ function ensureParent(path) {
 async function main() {
   const { cmd, flags, positional } = parseArgs(process.argv.slice(2));
   if (!cmd) {
-    die("usage: browser.mjs <start|goto|click|fill|check|wait|snapshot|screenshot|eval> ...");
+    die("usage: browser.mjs <chrome-path|start|goto|click|fill|check|wait|snapshot|screenshot|eval> ...");
+  }
+  if (cmd === "chrome-path") {
+    console.log(chromeBin());
+    return;
   }
   const state = loadState();
 
