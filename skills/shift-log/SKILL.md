@@ -27,11 +27,13 @@ ShiftLog stores permission-based activity memories (Markdown) so agents can resu
 
 ## Setup
 
-If `SHIFTLOG_API_ORIGIN` is unset, use `http://localhost:8787`. If `SHIFTLOG_API_TOKEN` is unset, use `dev-token`. Local MVP auth accepts that pair.
+If `SHIFTLOG_API_ORIGIN` is unset, use `http://localhost:8787`.
+
+`SHIFTLOG_API_TOKEN` is required. If it is unset, do not invent `dev-token` — the API refuses to start without a token (fail-closed), and a missing Bearer is 401. Ask the user to set the token (or load the repo `.env`). The only exception is `SHIFTLOG_ALLOW_INSECURE_DEV=1`, which makes the API accept Bearer `dev-token` as user `default` for local demos. Do not enable that outside a throwaway machine.
 
 ```bash
 export SHIFTLOG_API_ORIGIN="${SHIFTLOG_API_ORIGIN:-http://localhost:8787}"
-export SHIFTLOG_API_TOKEN="${SHIFTLOG_API_TOKEN:-dev-token}"
+# SHIFTLOG_API_TOKEN must already be set. Do not default it to dev-token.
 ```
 
 Auth: `Authorization: Bearer $SHIFTLOG_API_TOKEN` on every `/v1/*` call.
