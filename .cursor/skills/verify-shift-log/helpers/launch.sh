@@ -22,6 +22,9 @@ API_PORT="${SHIFTLOG_VERIFY_API_PORT:-$(pick_port 18787)}"
 WEB_PORT="${SHIFTLOG_VERIFY_WEB_PORT:-$(pick_port 13000)}"
 CDP_PORT="${SHIFTLOG_VERIFY_CDP_PORT:-$(pick_port 19222)}"
 WEB_ORIGIN="http://127.0.0.1:${WEB_PORT}"
+# Next.js 16 locks one `next dev` per distDir (.next/dev/lock). Isolate from the
+# documented user session on :3000 so verification can run alongside it.
+NEXT_DIST_DIR=".next-verify-${RUN_ID}"
 
 mkdir -p "$STATE_DIR/data" "$EVIDENCE_DIR" "$STATE_DIR/logs"
 
@@ -36,8 +39,9 @@ if [[ -f "$NEXT_ENV_FILE" ]]; then
   cp "$NEXT_ENV_FILE" "$STATE_DIR/next-env.d.ts.bak"
 fi
 
-# Isolation: never inherit a shared Postgres URL or the repo ./data directory.
-unset DATABASE_URL VITEST
+# Isolation: never inherit a shared Postgres URL, the repo ./data directory,
+# or an LLM key that would make demo titles non-deterministic.
+unset DATABASE_URL VITEST SHIFTLOG_LLM_API_KEY
 export SHIFTLOG_PERSIST=1
 export SHIFTLOG_DATA_DIR="$STATE_DIR/data"
 export SHIFTLOG_API_TOKEN="$TOKEN"
@@ -47,7 +51,7 @@ export PORT="$API_PORT"
 export SHIFTLOG_CORS_ORIGINS="http://127.0.0.1:${WEB_PORT},http://localhost:${WEB_PORT}"
 
 echo "verify-shift-log: starting API on :$API_PORT (data=$SHIFTLOG_DATA_DIR)" >&2
-setsid env -u DATABASE_URL -u VITEST \
+exec_in_new_session env -u DATABASE_URL -u VITEST -u SHIFTLOG_LLM_API_KEY \
   PORT="$API_PORT" \
   SHIFTLOG_API_TOKEN="$TOKEN" \
   SHIFTLOG_DATA_DIR="$SHIFTLOG_DATA_DIR" \
@@ -57,11 +61,12 @@ setsid env -u DATABASE_URL -u VITEST \
   >"$STATE_DIR/logs/api.log" 2>&1 &
 API_PID=$!
 
-echo "verify-shift-log: starting web on :$WEB_PORT -> $SHIFTLOG_API_ORIGIN" >&2
-setsid env \
+echo "verify-shift-log: starting web on :$WEB_PORT -> $SHIFTLOG_API_ORIGIN (distDir=$NEXT_DIST_DIR)" >&2
+exec_in_new_session env \
   NEXT_TELEMETRY_DISABLED=1 \
   SHIFTLOG_API_ORIGIN="$SHIFTLOG_API_ORIGIN" \
   SHIFTLOG_API_TOKEN="$TOKEN" \
+  SHIFTLOG_NEXT_DIST_DIR="$NEXT_DIST_DIR" \
   pnpm --filter @shift-log/web exec next dev --port "$WEB_PORT" --hostname 127.0.0.1 \
   >"$STATE_DIR/logs/web.log" 2>&1 &
 WEB_PID=$!
@@ -83,6 +88,7 @@ SHIFTLOG_API_TOKEN=$TOKEN
 SHIFTLOG_API_ORIGIN=http://127.0.0.1:${API_PORT}
 SHIFTLOG_DATA_DIR=$STATE_DIR/data
 WEB_ORIGIN=$WEB_ORIGIN
+SHIFTLOG_NEXT_DIST_DIR=$NEXT_DIST_DIR
 WEB_AGENTS_EXISTED=$WEB_AGENTS_EXISTED
 WEB_CLAUDE_EXISTED=$WEB_CLAUDE_EXISTED
 NEXT_ENV_BACKUP=$STATE_DIR/next-env.d.ts.bak

@@ -1,13 +1,26 @@
-import type { InteractionEvent, WindowUpload } from "@shift-log/schema";
+import {
+  omitTitleFields,
+  PermissionsConfigSchema,
+  titlePolicyFor,
+  type InteractionEvent,
+  type PermissionsConfig,
+  type WindowUpload,
+} from "@shift-log/schema";
+
+const defaultPermissions = PermissionsConfigSchema.parse({});
 
 /**
  * Server-side trust boundary for prohibited capture.
  * Collectors also strip these, but uploads must not rely on client honesty.
  */
-export function sanitizeWindowUpload(upload: WindowUpload): WindowUpload {
+export function sanitizeWindowUpload(
+  upload: WindowUpload,
+  permissions: PermissionsConfig = defaultPermissions,
+): WindowUpload {
   const events = upload.events
     .filter((event) => !isPrivateBrowsing(event))
-    .map(stripProhibitedMeta);
+    .map(stripProhibitedMeta)
+    .map((event) => applyTitlePolicy(event, permissions));
 
   return {
     metadata: {
@@ -31,4 +44,14 @@ function stripProhibitedMeta(event: InteractionEvent): InteractionEvent {
     ...event,
     meta: Object.keys(rest).length > 0 ? rest : undefined,
   };
+}
+
+function applyTitlePolicy(
+  event: InteractionEvent,
+  permissions: PermissionsConfig,
+): InteractionEvent {
+  if (event.app && titlePolicyFor(permissions, event.app) === "app_only") {
+    return omitTitleFields(event);
+  }
+  return event;
 }

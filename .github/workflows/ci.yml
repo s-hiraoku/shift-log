@@ -19,5 +19,5 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - run: pnpm --filter @shift-log/schema build
       - run: pnpm -r run test
-      - run: pnpm --filter @shift-log/api typecheck
-      - run: pnpm --filter @shift-log/desktop typecheck
+      - run: node --test scripts/*.test.mjs
+      - run: pnpm typecheck

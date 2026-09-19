@@ -26,7 +26,11 @@ Ready when:
 - API `GET $SHIFTLOG_API_ORIGIN/health` returns `{"ok":true,"service":"shift-log-api"}` (log line: `ShiftLog API listening on http://localhost:<port>`).
 - Web `GET $WEB_ORIGIN/` contains `ShiftLog`.
 
-Env the helper sets (do not inherit `DATABASE_URL`):
+`next dev` (16.3+) locks one process per `distDir` (`.next/dev/lock`). Launch sets `SHIFTLOG_NEXT_DIST_DIR=.next-verify-<run-id>` so an isolated web can run next to the documented user session on `:3000`. Cleanup deletes that directory only (never `apps/web/.next`).
+
+Launch starts API/web in a new session so cleanup can `kill -- -$pid`. GNU `setsid` is **not** on macOS. `helpers/common.sh` `exec_in_new_session` uses `setsid` when present, otherwise `python3` + `os.setsid()` (EPERM ignored if the process is already a group leader — `pgid` still equals `$pid`). Do not call `setsid` as a bare command; a leftover launch on this Mac failed with `setsid: command not found`.
+
+Env the helper sets (do not inherit `DATABASE_URL` or `SHIFTLOG_LLM_API_KEY`):
 
 | Variable | Role |
 | --- | --- |
@@ -36,9 +40,11 @@ Env the helper sets (do not inherit `DATABASE_URL`):
 | `PORT` | API listen port. |
 | `SHIFTLOG_RATE_LIMIT_PER_MIN` | `300` for this instance so a drive does not 429 (product default is `60`). |
 
+Launch also `unset`s `SHIFTLOG_LLM_API_KEY` so demo titles stay on the deterministic template.
+
 Teardown is `helpers/cleanup.sh`. Two verification instances can run side by side if each has its own ports, data dir, and token. Do not point two webs at one API if either will mutate history.
 
-`next dev` (observed Next.js 16.3.4) rewrites `apps/web/next-env.d.ts` and may add `apps/web/AGENTS.md` / `apps/web/CLAUDE.md`. Launch snapshots those paths; cleanup restores them. Do not commit those files from a verification run.
+`next dev` rewrites `apps/web/next-env.d.ts`. Next 16.3+ would also write `apps/web/AGENTS.md` / `CLAUDE.md`; this repo sets `agentRules: false` in `apps/web/next.config.ts`, so those files should not appear. Launch still snapshots `next-env.d.ts`; cleanup restores it and removes agent-rule files if a future Next version writes them. Do not commit those files from a verification run.
 
 ## Doctor
 
@@ -55,13 +61,14 @@ Require all of:
 - `GET /v1/permissions` with the instance token returns JSON containing `enabled` and `memories_enabled`.
 - `GET $WEB_ORIGIN/` contains `ShiftLog`.
 - Ports are **not** `8787` / `3000` (shared user session).
+- Chrome/Chromium binary exists (`node helpers/browser.mjs chrome-path` — macOS: `/Applications/Google Chrome.app/Contents/MacOS/Google Chrome`).
 - Final line: `doctor: HEALTHY`.
 
 If doctor fails, read `$STATE_DIR/logs/api.log` and `$STATE_DIR/logs/web.log`, then cleanup and relaunch. Do not continue.
 
 ## Drive
 
-No Playwright/Cypress harness exists in this repo. Drive the UI through the skill-owned Chrome CDP helper (system `google-chrome` / Chromium, headless). Confirm mutations with a second user-facing read: either the next screen or `curl` against this instance's API.
+No Playwright/Cypress harness exists in this repo. Drive the UI through the skill-owned Chrome CDP helper (Linux `google-chrome` / Chromium, or the macOS Google Chrome app bundle, headless). Confirm mutations with a second user-facing read: either the next screen or `curl` against this instance's API.
 
 ```bash
 B=.cursor/skills/verify-shift-log/helpers/browser.mjs
@@ -91,7 +98,7 @@ Stable handles observed in `apps/web` (Japanese UI, `lang=ja`):
 | Control | Handle |
 | --- | --- |
 | Nav | links `ホーム` `/`, `設定` `/settings`, `許可リスト` `/permissions`, `タイムライン` `/timeline` |
-| Home seed | button `有効化してデモデータを投入` (busy label `処理中…`) |
+| Home seed | button `有効化してデモデータを投入` (busy label `処理中…`; status `デモデータを投入中…`) |
 | Home after seed | status `準備完了: windows=N, memories=N. タイムラインを開いてください。` |
 | Home badges | `デフォルトオフ` → `収集オン` after both `enabled` and `memories_enabled`. Static `screenshots: off` and `keylog: forbidden` stay on home. |
 | Home jumps | links `タイムラインへ`, `設定へ`. Settings has no `タイムラインへ` (use nav `タイムライン`). |
@@ -99,11 +106,12 @@ Stable handles observed in `apps/web` (Japanese UI, `lang=ja`):
 | Settings save | button `保存` → status `保存しました` |
 | Settings seed | button `デモデータを投入` → `デモ投入完了: windows=N, memories=N` |
 | History delete | danger buttons `直近十分`, `一時間`, `一日`, `全部` → `削除完了: windows=N, memories=N` |
-| Allowlist | labels `アプリモード`, `除外アプリ（1行1件）`, `許可のみアプリ（include_only 時）`, `タイトル非記録アプリ（1行1件）`, `サイトモード`, `除外サイト`, `許可のみサイト`; button `保存` → `許可リストを保存しました` |
+| Allowlist | labels `アプリモード`, `除外アプリ（1行1件）`, `許可のみアプリ（include_only 時）`, `タイトル非記録アプリ（1行1件）`, `サイトモード`, `除外サイト`, `許可のみサイト`; button `保存` → `許可リストを保存しました`. Load failure: error text + `再読み込み` (not `読み込み中…`) |
 | Timeline search | `input[placeholder="検索（タイトル・本文・アプリ）"]` (no accessible name) + button `検索` (Enter also submits) |
-| Timeline empty | `まだ記憶がありません。収集を有効化して窓をアップロードしてください。` |
+| Timeline empty | `まだ記憶がありません。収集を有効化して窓をアップロードしてください。` (unseeded / blank search only) |
+| Timeline search miss | `「{query}」に一致する記憶はありません。` |
 | Memory row | link whose text is `front_matter.title` (demo titles like `Code / Chrome — 10分サマリ`) |
-| Memory detail | heading = title; section `Markdown 記憶`; back link `← タイムライン` |
+| Memory detail | heading = title; section `Markdown 記憶`; back link `← タイムライン` (loaded). Error-state link is `タイムラインへ戻る`. |
 
 Collection is default-off. Home badge `収集オン` requires `enabled` and `memories_enabled` (pause does not change that badge). The product `canCollect` helper also requires `paused === false`. The home seed button POSTs `/v1/demo/seed` with `{enable:true}` through the same-origin BFF (`/api/...`); the Next route injects the Bearer token server-side.
 
@@ -129,20 +137,23 @@ Proof standards:
 .cursor/skills/verify-shift-log/helpers/cleanup.sh
 ```
 
-Stops only the process groups for `CHROME_PID`, `WEB_PID`, and `API_PID` from the state file (SIGTERM, then SIGKILL). Launch starts API/web with `setsid` so children (`tsx watch`, `next dev`) die with the recorded PID. Removes `$STATE_DIR` (logs, SQLite, Chrome profile) and restores `apps/web/next-env.d.ts` plus any Next-generated `AGENTS.md` / `CLAUDE.md`. Leaves `$EVIDENCE_DIR`. After cleanup, confirm the evidence files still exist.
+Stops only the process groups for `CHROME_PID`, `WEB_PID`, and `API_PID` from the state file (SIGTERM, then SIGKILL). Launch starts API/web in a new session (`setsid`, or Python `os.setsid` on macOS — see Launch) so children (`tsx watch`, `next dev`) die with the recorded PID. Removes `$STATE_DIR` (logs, SQLite, Chrome profile) and restores `apps/web/next-env.d.ts` plus any Next-generated `AGENTS.md` / `CLAUDE.md`. Leaves `$EVIDENCE_DIR`. After cleanup, confirm the evidence files still exist.
 
 Do not `pkill -f next` / `pkill -f tsx` / kill-by-name.
 
 ## Helpers
 
-All scripts are executable. `launch.sh` prints the state file path on stdout; other helpers read `SHIFTLOG_VERIFY_STATE` or `/tmp/shiftlog-verify-current`.
+All scripts are executable. `launch.sh` prints the state file path on stdout; other helpers read `SHIFTLOG_VERIFY_STATE`, then `SHIFTLOG_VERIFY_CURRENT` (default `/tmp/shiftlog-verify-current`). Set `SHIFTLOG_VERIFY_CURRENT` to a unique path when another verify run might own the default symlink. `browser.mjs` honors the same two variables.
 
 | Command | What it does |
 | --- | --- |
-| `.cursor/skills/verify-shift-log/helpers/launch.sh` | Isolated API + web. No seed. |
-| `.cursor/skills/verify-shift-log/helpers/doctor.sh` | Read-only health + isolation check. |
+| `.cursor/skills/verify-shift-log/helpers/launch.sh` | Isolated API + web. No seed. Uses `exec_in_new_session` (not bare `setsid`). |
+| `.cursor/skills/verify-shift-log/helpers/doctor.sh` | Read-only health + isolation + Chrome binary check. |
+| `node .cursor/skills/verify-shift-log/helpers/browser.mjs chrome-path` | Print the Chrome/Chromium binary (no instance required). |
 | `node .cursor/skills/verify-shift-log/helpers/browser.mjs <cmd>` | Chrome CDP: `start`, `goto`, `click --text`, `fill --placeholder --value`, `check --text --checked`, `wait --text`, `snapshot --path` (innerText plus `--- form fields ---`), `screenshot --path`, `eval --js`. |
 | `.cursor/skills/verify-shift-log/helpers/prove-home-seed.sh` | One mapped feature: empty home → seed button → timeline titles + API proof. |
 | `.cursor/skills/verify-shift-log/helpers/cleanup.sh` | Kill recorded PIDs; keep evidence. |
+
+Chrome search order: `CHROME_PATH`, Linux `/usr/bin/google-chrome*`, then macOS `/Applications/Google Chrome.app/Contents/MacOS/Google Chrome` (then Chromium / Edge / Brave app bundles).
 
 Feature map: `features/`. After the app changes, run `/maintain-verification-skill`.

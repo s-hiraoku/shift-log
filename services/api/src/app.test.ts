@@ -258,6 +258,61 @@ describe("ShiftLog API", () => {
     expect(stored?.events[0]?.meta).toBeUndefined();
   });
 
+  it("strips Slack titles on upload when title_policy is app_only", async () => {
+    store.permissions = {
+      ...store.permissions,
+      enabled: true,
+      memories_enabled: true,
+      title_policy: { Slack: "app_only" },
+    };
+
+    const w = recentWindow("w-title-policy");
+    const res = await app.request("/v1/windows", {
+      method: "POST",
+      headers: authHeaders(),
+      body: JSON.stringify({
+        metadata: {
+          window_id: w.window_id,
+          window_start: w.window_start,
+          window_end: w.window_end,
+          devices: ["desk"],
+          dual_lane: false,
+          event_count: 1,
+          schema_version: "1",
+        },
+        events: [
+          {
+            id: "slack-channel",
+            type: "front_window_summary",
+            ts: w.at(1),
+            device: "desk",
+            app: "Slack",
+            site: "app.slack.com",
+            summary: "team_frontend-pr-n10n（チャンネル）",
+            meta: { channel: "team_frontend-pr-n10n" },
+          },
+        ],
+      }),
+    });
+    expect(res.status).toBe(200);
+    const stored = store.windows.get("w-title-policy");
+    expect(stored?.events).toEqual([
+      {
+        id: "slack-channel",
+        type: "front_window_summary",
+        ts: w.at(1),
+        device: "desk",
+        app: "Slack",
+      },
+    ]);
+    const dumped = JSON.stringify({
+      window: stored,
+      memories: [...store.memories.values()],
+    });
+    expect(dumped).not.toContain("team_frontend-pr-n10n");
+    expect(dumped).not.toContain("チャンネル");
+  });
+
   it("rejects windows whose capture time already exceeded 48h", async () => {
     store.permissions = {
       ...store.permissions,

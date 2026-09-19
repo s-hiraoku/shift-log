@@ -10,11 +10,13 @@ The allowlist page sets per-app and per-site exclude/include lists. Private brow
 - `allowlist-site-exclude` persists hostnames in `除外サイト`.
 - `allowlist-save` shows `許可リストを保存しました` and reloads the same values.
 - `allowlist-app-title-only` persists one app name per line in `タイトル非記録アプリ（1行1件）` as `title_policy[app] = "app_only"`.
+- `allowlist-load-error` shows the API error plus `再読み込み` (not `読み込み中…`) when `GET /v1/permissions` fails.
 
 ## How to get to it (user POV)
 
 - Choose nav `許可リスト` (`/permissions`).
 - Change a mode select or a textarea, then `保存`.
+- When permissions fail to load, stay on `/permissions` and choose `再読み込み`.
 
 ## Driving it with the ShiftLog helpers
 
@@ -51,7 +53,8 @@ node helpers/browser.mjs wait --text "許可リストを保存しました"
 - **Confirm persistence.** Run `curl -sS -H "Authorization: Bearer $SHIFTLOG_API_TOKEN" "$SHIFTLOG_API_ORIGIN/v1/permissions"`. `apps.exclude` is `["Slack"]`, `sites.exclude` is `["mail.example.test"]`, `title_policy.Slack` is `"app_only"`, both modes remain `exclude_listed`.
 - **Reload.** Run `goto /permissions` again. Do not trust `document.body.innerText` for the lists — it omits `<textarea>` values. Confirm via `snapshot` (`--- form fields ---` includes `Slack` and `mail.example.test`) or `eval` of each labeled `.value`.
 - **Include-only mode.** Change `アプリモード` to `Include only（明示したアプリのみ）` via the same `eval` on the `アプリモード` `<select>` (`value` `include_only`), put `Code` in `許可のみアプリ（include_only 時）`, optionally set `サイトモード` to `Include only` and `github.com` in `許可のみサイト`, save, and confirm `apps.mode === "include_only"` and `apps.include_only === ["Code"]`. `title_policy.Slack` must still be `"app_only"`.
-- **Proof.** Screenshot of the saved form, the permissions JSON, and a reload snapshot whose form-fields block still lists `Slack`. Feature id `allowlist`.
+- **Load error (last; stops this instance's API).** Stop the API process from the state file (`kill -- -$API_PID`), then `goto /permissions`. Heading `許可リスト`, error text, and `再読み込み` appear. The page must not stay on `読み込み中…`. Clicking `再読み込み` retries the same GET (still the error UI while the API is down). Do this after the save/reload proof; cleanup the instance afterwards.
+- **Proof.** Screenshot of the saved form, the permissions JSON, a reload snapshot whose form-fields block still lists `Slack`, and the load-error snapshot with `再読み込み`. Feature id `allowlist`.
 
 ## Gotchas
 
@@ -59,5 +62,7 @@ node helpers/browser.mjs wait --text "許可リストを保存しました"
 - Headless Chrome `innerText` does not include `<textarea>` values. A page snapshot without the form-fields block will look empty after reload even when `.value` is `Slack`.
 - `splitLines` trims and drops blank lines. A trailing newline does not create an empty entry.
 - Saving the allowlist PUTs the full permissions object. It must not clear `enabled` / `memories_enabled` if those were already on.
+- `title_policy` is rebuilt from `タイトル非記録アプリ` on each save, not merged. Clearing that textarea and saving drops `app_only` entries.
 - There is no client-side validation that an include-only list is non-empty. An empty include-only list is a legal saved state; collectors would match nothing. Assert the JSON you wrote.
 - Private browsing is not listed here. Do not invent a checkbox for it.
+- A failed `GET /v1/permissions` must not stay on `読み込み中…`. Wait for `再読み込み` (and the error text). Clicking it retries the same GET.

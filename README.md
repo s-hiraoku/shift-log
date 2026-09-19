@@ -42,6 +42,22 @@ Cursor などではリポジトリの Skill を有効化するか、`skills/shif
 - 同一十分窓に PC とスマホがいれば `desk` / `mobile` の二レーン
 
 
+## インストール（macOS）
+
+Git と Node.js 20 以降（同梱の npm を使います）が必要です。pnpm は事前に入れなくてよく、`package.json` の `packageManager` で固定した版を `~/.local/share/shiftlog/toolchain` へ取り寄せます。グローバルの pnpm は変更しません。ワンライナーはソースを `~/.local/share/shiftlog/src` に置き、この 1 台だけのランダムな API トークンを `.env` に書いてキーチェーンへ登録し、`pnpm setup:launchd` まで実行します。SQLite は `~/.local/share/shiftlog/shiftlog.db` に残ります。API はループバック（`127.0.0.1:8787`）のみで待ち受けます。
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/s-hiraoku/shift-log/main/scripts/install.sh | bash
+```
+
+更新（DB / `.env` / キーチェーンは消さない）:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/s-hiraoku/shift-log/main/scripts/install.sh | bash -s -- update
+```
+
+Linux では同じスクリプトがソース配置とビルドまで行い、常駐は [`docs/ops.md`](docs/ops.md) の systemd 手順を使います。開発用にリポジトリを直接 clone する場合は次の手順です。
+
 ## MVP クイックスタート
 
 ```bash
@@ -141,7 +157,7 @@ Web UI は `/api/*` の Route Handler 経由で API を呼び、Bearer トーク
 - API: `services/api` を別プロジェクトにし、`api/index.ts` をエントリに使用
 - またはルートの `vercel.json` で API ルートを紐付け
 
-Vercel + Postgres（Neon など）では、ウィンドウタイトルに含まれる業務情報（Slack のチャンネル名、社内ツールの案件名など）が社外のデータベースに保存されます。社内情報を扱う場合はセルフホスト（SQLite は `~/.local/share/shiftlog/shiftlog.db`、ファイル権限 0600）にしてください。タイトルを落としてアプリ名だけ残す `app_only`（#41）は未実装です。
+Vercel + Postgres（Neon など）では、ウィンドウタイトルに含まれる業務情報（Slack のチャンネル名、社内ツールの案件名など）が社外のデータベースに保存されます。社内情報を扱う場合はセルフホスト（SQLite は `~/.local/share/shiftlog/shiftlog.db`、ファイル権限 0600）にするか、許可リストの「タイトル非記録アプリ」で `app_only`（#41）を指定してください。滞在時間は残し、チャンネル名などはコレクタが送る前に落とします。
 
 ## テスト
 

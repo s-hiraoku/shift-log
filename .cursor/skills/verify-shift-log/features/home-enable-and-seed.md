@@ -21,7 +21,7 @@ The home card lets a user turn collection on and insert three sample 10-minute m
 Preconditions:
 
 - Doctor reports healthy isolated origins.
-- Timeline is empty (`まだ記憶がありません` on `/timeline`, or `GET /v1/timeline` → `{"items":[]}`).
+- Timeline is empty (`まだ記憶がありません` on `/timeline`, or `GET /v1/timeline` → `{"items":[],"next_cursor":null}`).
 - Home badge reads `デフォルトオフ`.
 
 - **Open home.** Run `node helpers/browser.mjs goto /`. Heading `ShiftLog` and button `有効化してデモデータを投入` are visible. Badge is `デフォルトオフ`.
@@ -35,9 +35,9 @@ Preconditions:
 
 ## Gotchas
 
-- Busy label `処理中…` disables the home button until the request finishes. Wait for `準備完了`, not a fixed sleep.
+- Busy label `処理中…` disables the home button until the request finishes. Status also reads `デモデータを投入中…` while the request is in flight. Wait for `準備完了`, not a fixed sleep.
 - `収集オン` requires both collection flags. Toggling only `ShiftLog を有効化` on Settings leaves the home badge off.
 - Demo window ids embed timestamps. Re-seeding creates additional memories; assert “at least these titles”, not an exact count of 3, unless the instance was empty.
-- Titles come from the deterministic summarizer (`Code / Chrome — 10分サマリ`). If `SHIFTLOG_LLM_API_KEY` is set on the API process, titles may differ — this verification launch unsets that path by not exporting the key.
+- Titles come from the deterministic summarizer (`Code / Chrome — 10分サマリ`). If `SHIFTLOG_LLM_API_KEY` is set on the API process, titles may differ — `helpers/launch.sh` unsets that variable (and starts the API with `env -u SHIFTLOG_LLM_API_KEY`) so an inherited key cannot leak into this instance.
 - `pnpm seed` / curl is a documented CLI path. It is not a substitute for the home-button entry when the feature under test is the button.
 - `next dev` may write `apps/web/AGENTS.md`. Cleanup restores the tree; do not treat that file as product output.

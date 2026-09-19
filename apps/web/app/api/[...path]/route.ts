@@ -1,13 +1,21 @@
 import { NextRequest, NextResponse } from "next/server";
+import { resolveBffApiToken } from "@/lib/bff-auth";
 
 const API_ORIGIN = process.env.SHIFTLOG_API_ORIGIN ?? "http://localhost:8787";
 /** Server-only — never expose via NEXT_PUBLIC_*. */
-const API_TOKEN = process.env.SHIFTLOG_API_TOKEN ?? "dev-token";
 
 async function proxy(
   req: NextRequest,
   context: { params: Promise<{ path: string[] }> },
 ): Promise<NextResponse> {
+  const resolved = resolveBffApiToken();
+  if ("error" in resolved) {
+    return NextResponse.json(
+      { error: "auth_not_configured", message: resolved.error },
+      { status: 503 },
+    );
+  }
+
   const { path } = await context.params;
   const target = new URL(`/${path.join("/")}`, API_ORIGIN);
   target.search = req.nextUrl.search;
@@ -15,7 +23,7 @@ async function proxy(
   const headers = new Headers();
   const contentType = req.headers.get("content-type");
   if (contentType) headers.set("content-type", contentType);
-  headers.set("authorization", `Bearer ${API_TOKEN}`);
+  headers.set("authorization", `Bearer ${resolved.token}`);
 
   const init: RequestInit = {
     method: req.method,

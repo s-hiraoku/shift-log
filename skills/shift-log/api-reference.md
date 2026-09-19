@@ -51,7 +51,10 @@ Authorization: Bearer <SHIFTLOG_API_TOKEN>
 
 ```js
 const origin = process.env.SHIFTLOG_API_ORIGIN ?? "http://localhost:8787";
-const token = process.env.SHIFTLOG_API_TOKEN ?? "dev-token";
+const token = process.env.SHIFTLOG_API_TOKEN;
+if (!token) {
+  throw new Error("SHIFTLOG_API_TOKEN must be set (fail-closed; do not default to dev-token)");
+}
 
 const res = await fetch(`${origin}/v1/agent/continue`, {
   method: "POST",
