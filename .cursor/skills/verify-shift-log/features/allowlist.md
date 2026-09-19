@@ -8,7 +8,7 @@ The allowlist page sets per-app and per-site exclude/include lists. Private brow
 - `allowlist-app-exclude` persists one app name per line in `除外アプリ（1行1件）`.
 - `allowlist-site-mode` switches sites between `Exclude listed` and `Include only`.
 - `allowlist-site-exclude` persists hostnames in `除外サイト`.
-- `allowlist-save` shows `許可リストを保存しました` and reloads the same values.
+- `allowlist-save` shows `許可リストを保存しました`. Re-opening `/permissions` hydrates the same values (save does not reload the route).
 - `allowlist-app-title-only` persists one app name per line in `タイトル非記録アプリ（1行1件）` as `title_policy[app] = "app_only"`.
 - `allowlist-load-error` shows the API error plus `再読み込み` (not `読み込み中…`) when `GET /v1/permissions` fails.
 
