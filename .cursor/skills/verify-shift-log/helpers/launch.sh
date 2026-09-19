@@ -40,12 +40,13 @@ if [[ -f "$NEXT_ENV_FILE" ]]; then
 fi
 
 # Isolation: never inherit a shared Postgres URL, the repo ./data directory,
-# or an LLM key that would make demo titles non-deterministic.
+# an LLM key that would make demo titles non-deterministic, or a widened bind.
 unset DATABASE_URL VITEST SHIFTLOG_LLM_API_KEY
 export SHIFTLOG_PERSIST=1
 export SHIFTLOG_DATA_DIR="$STATE_DIR/data"
 export SHIFTLOG_API_TOKEN="$TOKEN"
 export SHIFTLOG_API_ORIGIN="http://127.0.0.1:${API_PORT}"
+export SHIFTLOG_BIND_HOST=127.0.0.1
 export SHIFTLOG_RATE_LIMIT_PER_MIN="${SHIFTLOG_RATE_LIMIT_PER_MIN:-300}"
 export PORT="$API_PORT"
 export SHIFTLOG_CORS_ORIGINS="http://127.0.0.1:${WEB_PORT},http://localhost:${WEB_PORT}"
@@ -55,6 +56,7 @@ exec_in_new_session env -u DATABASE_URL -u VITEST -u SHIFTLOG_LLM_API_KEY \
   PORT="$API_PORT" \
   SHIFTLOG_API_TOKEN="$TOKEN" \
   SHIFTLOG_DATA_DIR="$SHIFTLOG_DATA_DIR" \
+  SHIFTLOG_BIND_HOST=127.0.0.1 \
   SHIFTLOG_RATE_LIMIT_PER_MIN="$SHIFTLOG_RATE_LIMIT_PER_MIN" \
   SHIFTLOG_CORS_ORIGINS="$SHIFTLOG_CORS_ORIGINS" \
   pnpm --filter @shift-log/api dev \
