@@ -97,7 +97,7 @@ Stable handles observed in `apps/web` (Japanese UI, `lang=ja`):
 
 | Control | Handle |
 | --- | --- |
-| Nav | links `ホーム` `/`, `設定` `/settings`, `許可リスト` `/permissions`, `タイムライン` `/timeline` |
+| Nav | links `ホーム` `/`, `設定` `/settings`, `許可リスト` `/permissions`, `タイムライン` `/timeline`. These labels appear on every page, so `wait --text` on a nav label alone is not proof the target page finished loading — wait for a body-only string from the feature file. |
 | Home seed | button `有効化してデモデータを投入` (busy label `処理中…`; status `デモデータを投入中…`) |
 | Home after seed | status `準備完了: windows=N, memories=N. タイムラインを開いてください。` |
 | Home badges | `デフォルトオフ` → `収集オン` after both `enabled` and `memories_enabled`. Static `screenshots: off` and `keylog: forbidden` stay on home. |

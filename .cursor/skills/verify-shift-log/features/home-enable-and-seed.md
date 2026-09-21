@@ -29,7 +29,7 @@ Preconditions:
 - **Seed from home.** Run `node helpers/browser.mjs click --text "有効化してデモデータを投入"`. Button may briefly read `処理中…`. Status includes `準備完了:` and `windows=` / `memories=`. Badge becomes `収集オン`.
 - **Open timeline.** Run `node helpers/browser.mjs click --text "タイムラインへ"`. Heading `タイムライン` appears. The list includes `Code / Chrome — 10分サマリ`, `Terminal / Slack — 10分サマリ`, and `Safari — 10分サマリ`.
 - **Confirm persistence.** Run `curl -sS -H "Authorization: Bearer $SHIFTLOG_API_TOKEN" "$SHIFTLOG_API_ORIGIN/v1/timeline"` and `.../v1/permissions`. Timeline has at least three items with those titles. Permissions have `enabled: true`, `memories_enabled: true`, `paused: false`.
-- **Settings entry (separate launch or accept extra rows).** Go to `/settings`, run `node helpers/browser.mjs click --text "デモデータを投入"`, wait for `デモ投入完了`. A second seed adds more windows; it does not replace the first three.
+- **Settings entry (separate launch or accept extra rows).** Run `goto /settings`, then `wait --text "デモデータを投入"` (do not wait only for `設定` — that string is also the nav link and matches before the page body loads). Then `click --text "デモデータを投入"` and wait for `デモ投入完了`. A second seed adds more windows; it does not replace the first three.
 - **CLI entry.** Run `curl -sS -X POST -H "Authorization: Bearer $SHIFTLOG_API_TOKEN" -H "Content-Type: application/json" -d '{"enable":true}' "$SHIFTLOG_API_ORIGIN/v1/demo/seed"`. Exit 0, JSON has `ok: true` and `permissions_enabled: true`. Do not count this as the home-button proof.
 - **Proof.** Write snapshots/screenshots of home-after-seed and timeline-after-seed plus `proof.json` with the feature id `home-enable-and-seed` and entry `home button 有効化してデモデータを投入`. `helpers/prove-home-seed.sh` is the scripted form of this recipe.
 
@@ -40,4 +40,5 @@ Preconditions:
 - Demo window ids embed timestamps. Re-seeding creates additional memories; assert “at least these titles”, not an exact count of 3, unless the instance was empty.
 - Titles come from the deterministic summarizer (`Code / Chrome — 10分サマリ`). If `SHIFTLOG_LLM_API_KEY` is set on the API process, titles may differ — `helpers/launch.sh` unsets that variable (and starts the API with `env -u SHIFTLOG_LLM_API_KEY`) so an inherited key cannot leak into this instance.
 - `pnpm seed` / curl is a documented CLI path. It is not a substitute for the home-button entry when the feature under test is the button.
+- Nav labels (`ホーム` / `設定` / `許可リスト` / `タイムライン`) appear on every page. `wait --text "設定"` can succeed while Settings is still showing `読み込み中…`. Wait for a body-only string such as `デモデータを投入`, `履歴削除`, or `screenshots: off`.
 - `next dev` may write `apps/web/AGENTS.md`. Cleanup restores the tree; do not treat that file as product output.

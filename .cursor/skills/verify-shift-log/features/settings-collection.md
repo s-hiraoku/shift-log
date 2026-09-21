@@ -23,7 +23,7 @@ Preconditions:
 - Doctor reports healthy isolated origins.
 - For delete proof, seed first (`home-enable-and-seed` or Settings `デモデータを投入`) so there is something to remove.
 
-- **Open settings.** Run `node helpers/browser.mjs goto /settings`. Wait for heading `設定` (not `読み込み中…`). Privacy badges `screenshots: off` and `private_browsing: permanently excluded` are visible.
+- **Open settings.** Run `node helpers/browser.mjs goto /settings`. Do not treat a bare `wait --text "設定"` as ready — that matches the nav link. Wait for body content such as `screenshots: off` and `private_browsing: permanently excluded` (and/or `履歴削除`), and confirm `読み込み中…` is gone.
 - **Enable both flags.** Run `node helpers/browser.mjs check --text "ShiftLog を有効化" --checked true` and `check --text "Memories 相当を有効化（必須）" --checked true`. Run `click --text "保存"`. Wait for `保存しました`.
 - **Confirm save.** Run `curl -sS -H "Authorization: Bearer $SHIFTLOG_API_TOKEN" "$SHIFTLOG_API_ORIGIN/v1/permissions"`. `enabled` and `memories_enabled` are `true`. Reload `/` and expect badge `収集オン`.
 - **Pause.** Return to `/settings`. Run `check --text "一時停止（メニューバー / コントロールセンター相当）" --checked true` and `click --text "保存"`. Permissions show `paused: true` while the two enable flags stay true. Home badge stays `収集オン` (ready is enable+memories, not pause).
@@ -37,4 +37,5 @@ Preconditions:
 - `保存` and `デモデータを投入` are both unlabeled `button`s. Match on exact visible text.
 - History delete is immediate and has no confirm dialog. Prefer `全部` on a disposable instance. Scoped deletes keep a row when `window_end` is before the cutoff (overlap on interval end, not `window_start`). Demo rows start ~40 / ~25 / ~12 minutes ago and each lasts 10 minutes, so `直近十分` removes Safari (`~12 min`) and leaves Code / Terminal.
 - Enabling collection without `Memories 相当を有効化（必須）` still shows `デフォルトオフ` on home.
+- Nav label `設定` is present on every page. Waiting only for that string can click before the Settings form has left `読み込み中…`.
 - Do not treat the static `screenshots: off` badges as proof that a toggle saved; they never change.
