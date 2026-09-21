@@ -23,14 +23,14 @@ STATE_FILE="$(.cursor/skills/verify-shift-log/helpers/launch.sh)"
 
 Ready when:
 
-- API `GET $SHIFTLOG_API_ORIGIN/health` returns `{"ok":true,"service":"shift-log-api"}` (log line: `ShiftLog API listening on http://localhost:<port>`).
+- API `GET $SHIFTLOG_API_ORIGIN/health` returns `{"ok":true,"service":"shift-log-api"}` (log line: `ShiftLog API listening on http://127.0.0.1:<port>` — launch pins `SHIFTLOG_BIND_HOST=127.0.0.1`).
 - Web `GET $WEB_ORIGIN/` contains `ShiftLog`.
 
 `next dev` (16.3+) locks one process per `distDir` (`.next/dev/lock`). Launch sets `SHIFTLOG_NEXT_DIST_DIR=.next-verify-<run-id>` so an isolated web can run next to the documented user session on `:3000`. Cleanup deletes that directory only (never `apps/web/.next`).
 
 Launch starts API/web in a new session so cleanup can `kill -- -$pid`. GNU `setsid` is **not** on macOS. `helpers/common.sh` `exec_in_new_session` uses `setsid` when present, otherwise `python3` + `os.setsid()` (EPERM ignored if the process is already a group leader — `pgid` still equals `$pid`). Do not call `setsid` as a bare command; a leftover launch on this Mac failed with `setsid: command not found`.
 
-Env the helper sets (do not inherit `DATABASE_URL` or `SHIFTLOG_LLM_API_KEY`):
+Env the helper sets (do not inherit `DATABASE_URL`, `SHIFTLOG_LLM_API_KEY`, or `SHIFTLOG_BIND_HOST`):
 
 | Variable | Role |
 | --- | --- |
@@ -38,6 +38,7 @@ Env the helper sets (do not inherit `DATABASE_URL` or `SHIFTLOG_LLM_API_KEY`):
 | `SHIFTLOG_API_ORIGIN` | Web BFF proxy target (`apps/web/app/api/[...path]/route.ts`). |
 | `SHIFTLOG_DATA_DIR` | SQLite at `$SHIFTLOG_DATA_DIR/shiftlog.db`. |
 | `PORT` | API listen port. |
+| `SHIFTLOG_BIND_HOST` | `127.0.0.1` so this instance stays on loopback even if `.env` sets `0.0.0.0`. |
 | `SHIFTLOG_RATE_LIMIT_PER_MIN` | `300` for this instance so a drive does not 429 (product default is `60`). |
 
 Launch also `unset`s `SHIFTLOG_LLM_API_KEY` so demo titles stay on the deterministic template.
