@@ -23,9 +23,9 @@ The allowlist page sets per-app and per-site exclude/include lists. Private brow
 Preconditions:
 
 - Doctor reports healthy isolated origins.
-- Page has left the `読み込み中…` state (heading `許可リスト` visible).
+- Page has left the `読み込み中…` state. Prefer waiting for body-only copy such as `アプリモード` or `除外アプリ（1行1件）` — nav also contains `許可リスト`.
 
-- **Open page.** Run `node helpers/browser.mjs goto /permissions`. Wait for `許可リスト`. Default modes are `Exclude listed（除外以外を許可）` for apps and `Exclude listed` for sites. Textareas start empty on a fresh instance.
+- **Open page.** Run `node helpers/browser.mjs goto /permissions`. Wait for `アプリモード` (not only `許可リスト`, which is also a nav label). Default modes are `Exclude listed（除外以外を許可）` for apps and `Exclude listed` for sites. Textareas start empty on a fresh instance.
 - **Exclude an app.** The helper has no dedicated select/textarea command. Use `eval --js` to set the labeled controls, then click save:
 
 ```text
@@ -65,4 +65,5 @@ node helpers/browser.mjs wait --text "許可リストを保存しました"
 - `title_policy` is rebuilt from `タイトル非記録アプリ` on each save, not merged. Clearing that textarea and saving drops `app_only` entries.
 - There is no client-side validation that an include-only list is non-empty. An empty include-only list is a legal saved state; collectors would match nothing. Assert the JSON you wrote.
 - Private browsing is not listed here. Do not invent a checkbox for it.
+- Nav label `許可リスト` is present on every page. Wait for a form label such as `アプリモード` before editing controls.
 - A failed `GET /v1/permissions` must not stay on `読み込み中…`. Wait for `再読み込み` (and the error text). Clicking it retries the same GET.
