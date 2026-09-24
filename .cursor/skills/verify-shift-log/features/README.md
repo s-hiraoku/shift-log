@@ -44,7 +44,7 @@ Keep implementation details out of the map. Name only user paths, stable handles
 ## Features
 
 - [Enable collection and seed demo memories](./home-enable-and-seed.md) covers the home (and settings) seed button, the off→on badge, and the first timeline rows.
-- [Timeline, search, and memory detail](./timeline-and-search.md) covers empty state, title/body/app search, opening a memory, and the miss path.
+- [Timeline, search, and memory detail](./timeline-and-search.md) covers empty state, search across title, row description, body, app, and entity values, opening a memory, and the miss path.
 - [Settings collection and history delete](./settings-collection.md) covers the three collection checkboxes, save, and irreversible history delete.
 - [App and site allowlist](./allowlist.md) covers exclude/include modes and persisting the lists.
 - [Agent continue is context only](./agent-continue.md) covers `/v1/agent/continue` and `/v1/agent/recent` returning `mode: context_only` without acting.
