@@ -157,7 +157,12 @@ export function omitRestrictedFields<E extends RestrictedEvent>(
   }
 
   const siteText = typeof event.site === "string" ? event.site.trim() : "";
+  const privacyUnknown =
+    typeof event.meta === "object" &&
+    event.meta !== null &&
+    (event.meta as { privateBrowsingUnknown?: unknown }).privateBrowsingUnknown === true;
   const dropPath =
+    privacyUnknown ||
     keptPath === undefined ||
     (event.type === "browser_navigation" &&
       (siteText === "" || !isSourceAllowed(permissions, "sites", siteText)));

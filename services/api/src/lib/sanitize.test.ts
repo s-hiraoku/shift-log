@@ -136,6 +136,39 @@ describe("sanitizeWindowUpload", () => {
     expect(twice.events[0]?.urlPath).toBe("/docs");
   });
 
+  it("drops urlPath when privacy mode was not classified", () => {
+    const upload: WindowUpload = {
+      metadata: { ...sampleMeta, window_id: "w-unknown", event_count: 1 },
+      events: [
+        {
+          id: "nav",
+          type: "browser_navigation",
+          ts: "2026-08-30T01:01:00.000Z",
+          device: "desk",
+          app: "Safari",
+          site: "github.com",
+          summary: "Permissions",
+          urlPath: "/settings/permissions",
+          meta: { privateBrowsingUnknown: true },
+        },
+      ],
+    };
+    const sanitized = sanitizeWindowUpload(upload);
+    expect(sanitized.events).toEqual([
+      {
+        id: "nav",
+        type: "browser_navigation",
+        ts: "2026-08-30T01:01:00.000Z",
+        device: "desk",
+        app: "Safari",
+        site: "github.com",
+        summary: "Permissions",
+        meta: { privateBrowsingUnknown: true },
+      },
+    ]);
+    expect(JSON.stringify(sanitized.events)).not.toContain("/settings/permissions");
+  });
+
   it("drops urlPath when title_policy is app_only", () => {
     const upload: WindowUpload = {
       metadata: { ...sampleMeta, window_id: "w-path-app-only", event_count: 1 },

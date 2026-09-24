@@ -185,6 +185,68 @@ describe("DesktopCollector", () => {
     expect(window.events.some((e) => e.type === "typing_presence")).toBe(false);
   });
 
+  it("records no events for an incognito window", () => {
+    const collector = new DesktopCollector(
+      PermissionsConfigSchema.parse({
+        enabled: true,
+        memories_enabled: true,
+      }),
+      "http://localhost:8787",
+      "dev-token",
+    );
+    emitOsTick(
+      collector,
+      {
+        app: "Google Chrome",
+        title: "New Tab",
+        site: "github.com",
+        urlPath: "/settings/permissions",
+        privateBrowsing: true,
+      },
+      null,
+    );
+    expect(collector.drainWindow(new Date()).events).toEqual([]);
+  });
+
+  it("keeps a normal Chrome path and omits a path when privacy is unknown", () => {
+    const collector = new DesktopCollector(
+      PermissionsConfigSchema.parse({
+        enabled: true,
+        memories_enabled: true,
+      }),
+      "http://localhost:8787",
+      "dev-token",
+    );
+    emitOsTick(
+      collector,
+      {
+        app: "Google Chrome",
+        title: "shift-log/pull/98",
+        site: "github.com",
+        urlPath: "/s-hiraoku/shift-log/pull/98",
+      },
+      null,
+    );
+    emitOsTick(
+      collector,
+      {
+        app: "Safari",
+        title: "Permissions",
+        site: "github.com",
+        urlPath: "/settings/permissions",
+        privateBrowsingUnknown: true,
+      },
+      { app: "Google Chrome", title: "shift-log/pull/98" },
+    );
+    const events = collector.drainWindow(new Date()).events;
+    const chrome = events.find((event) => event.type === "browser_navigation" && event.app === "Google Chrome");
+    const safari = events.find((event) => event.type === "browser_navigation" && event.app === "Safari");
+    expect(chrome?.urlPath).toBe("/s-hiraoku/shift-log/pull/98");
+    expect(safari?.urlPath).toBeUndefined();
+    expect(safari?.meta).toEqual({ privateBrowsingUnknown: true });
+    expect(JSON.stringify(events)).not.toContain("/settings/permissions");
+  });
+
   it("copies urlPath onto browser_navigation only", () => {
     const collector = new DesktopCollector(
       PermissionsConfigSchema.parse({

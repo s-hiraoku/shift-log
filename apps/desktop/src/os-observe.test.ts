@@ -108,14 +108,19 @@ describe("observeFrontWindow", () => {
         return { stdout: "Safari\tComputer History\n", stderr: "" };
       }
       if (file === "osascript" && args[1]?.includes("Safari")) {
-        return { stdout: "https://learn.chatgpt.com/docs?token=secret#section\n", stderr: "" };
+        return {
+          stdout: "unknown\thttps://learn.chatgpt.com/docs?token=secret#section\n",
+          stderr: "",
+        };
       }
       throw new Error(`unexpected ${file} ${args.join(" ")}`);
     };
     const front = await observeFrontWindow({ platform: "darwin", exec });
     expect(front?.app).toBe("Safari");
     expect(front?.site).toBe("learn.chatgpt.com");
-    expect(front?.urlPath).toBe("/docs");
+    expect(front?.urlPath).toBeUndefined();
+    expect(front?.privateBrowsing).toBeUndefined();
+    expect(front?.privateBrowsingUnknown).toBe(true);
   });
 
   it("reads a Chrome tab pathname without the query or fragment", async () => {
@@ -125,7 +130,7 @@ describe("observeFrontWindow", () => {
       }
       if (file === "osascript" && args[1]?.includes("Google Chrome")) {
         return {
-          stdout: "https://github.com/s-hiraoku/shift-log/pull/98?token=secret#files\n",
+          stdout: "normal\thttps://github.com/s-hiraoku/shift-log/pull/98?token=secret#files\n",
           stderr: "",
         };
       }
@@ -134,5 +139,40 @@ describe("observeFrontWindow", () => {
     const front = await observeFrontWindow({ platform: "darwin", exec });
     expect(front?.site).toBe("github.com");
     expect(front?.urlPath).toBe("/s-hiraoku/shift-log/pull/98");
+    expect(front?.privateBrowsing).toBeUndefined();
+    expect(front?.privateBrowsingUnknown).toBeUndefined();
+  });
+
+  it("marks a Chrome incognito window and does not keep the tab path", async () => {
+    const exec: ExecFileFn = async (file, args) => {
+      if (file === "osascript" && args[1]?.includes("System Events")) {
+        return { stdout: "Google Chrome\tNew Tab\n", stderr: "" };
+      }
+      if (file === "osascript" && args[1]?.includes("Google Chrome")) {
+        return { stdout: "incognito\thttps://github.com/settings/permissions\n", stderr: "" };
+      }
+      throw new Error(`unexpected ${file} ${args.join(" ")}`);
+    };
+    const front = await observeFrontWindow({ platform: "darwin", exec });
+    expect(front?.privateBrowsing).toBe(true);
+    expect(front?.urlPath).toBeUndefined();
+    expect(front?.site).toBe("github.com");
+  });
+
+  it("omits urlPath when the Chrome privacy probe fails", async () => {
+    const exec: ExecFileFn = async (file, args) => {
+      if (file === "osascript" && args[1]?.includes("System Events")) {
+        return { stdout: "Google Chrome\tgithub.com\n", stderr: "" };
+      }
+      if (file === "osascript" && args[1]?.includes("Google Chrome")) {
+        throw new Error("osascript failed");
+      }
+      throw new Error(`unexpected ${file} ${args.join(" ")}`);
+    };
+    const front = await observeFrontWindow({ platform: "darwin", exec });
+    expect(front?.urlPath).toBeUndefined();
+    expect(front?.privateBrowsing).toBeUndefined();
+    expect(front?.privateBrowsingUnknown).toBe(true);
+    expect(front?.site).toBe("github.com");
   });
 });

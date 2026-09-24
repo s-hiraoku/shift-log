@@ -214,13 +214,19 @@ function titleMeta(observed: FrontWindow): FrontWindow["meta"] {
   return observed.meta ?? interpretWindowTitle(observed.app, observed.title);
 }
 
+function eventMeta(observed: FrontWindow): Record<string, unknown> | undefined {
+  const meta = titleMeta(observed);
+  if (!observed.privateBrowsingUnknown) return meta;
+  return { ...meta, privateBrowsingUnknown: true };
+}
+
 export function emitOsTick(
   collector: DesktopCollector,
   observed: FrontWindow,
   last: { app: string; title: string } | null,
 ): { app: string; title: string } {
   const now = new Date().toISOString();
-  const meta = titleMeta(observed);
+  const meta = eventMeta(observed);
   if (observed.privateBrowsing) return last ?? { app: observed.app, title: observed.title };
   if (!last || last.app !== observed.app) {
     collector.observe({
@@ -241,7 +247,7 @@ export function emitOsTick(
       app: observed.app,
       site: observed.site,
       summary: observed.title.slice(0, 200) || observed.site,
-      ...(observed.urlPath ? { urlPath: observed.urlPath } : {}),
+      ...(observed.urlPath && !observed.privateBrowsingUnknown ? { urlPath: observed.urlPath } : {}),
       ...(meta ? { meta } : {}),
     });
   } else if (!last || last.title !== observed.title) {
