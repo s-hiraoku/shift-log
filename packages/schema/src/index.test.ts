@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   canCollect,
+  hostAndPath,
   isSourceAllowed,
   omitTitleFields,
   PermissionsConfigSchema,
@@ -59,7 +60,7 @@ describe("permissions", () => {
     ).toThrow();
   });
 
-  it("omits summary, site, and meta while keeping app", () => {
+  it("omits summary, site, meta, and urlPath while keeping app", () => {
     expect(
       omitTitleFields({
         id: "e1",
@@ -68,12 +69,31 @@ describe("permissions", () => {
         site: "app.slack.com",
         summary: "team_frontend-pr-n10n（チャンネル）",
         meta: { channel: "team_frontend-pr-n10n" },
+        urlPath: "/docs",
       }),
     ).toEqual({
       id: "e1",
       type: "front_window_summary",
       app: "Slack",
     });
+  });
+
+  it("parses an absolute http(s) URL down to a host and pathname", () => {
+    expect(hostAndPath("https://learn.chatgpt.com/docs?token=secret#section")).toEqual({
+      kind: "absolute",
+      host: "learn.chatgpt.com",
+      path: "/docs",
+    });
+    expect(hostAndPath("https://github.com")).toEqual({
+      kind: "absolute",
+      host: "github.com",
+      path: "/",
+    });
+  });
+
+  it("parses a pathname and rejects a non-http URL", () => {
+    expect(hostAndPath("/docs?token=1#section")).toEqual({ kind: "path", path: "/docs" });
+    expect(hostAndPath("ftp://learn.chatgpt.com/docs")).toBeUndefined();
   });
 
   it("forbids screenshots and full keylog in capture policy", () => {
