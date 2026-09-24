@@ -86,15 +86,6 @@ export function titlePolicyFor(config: PermissionsConfig, name: string): TitlePo
 
 const PATH_ONLY_BASE = "https://urlpath.invalid";
 
-// The schema package compiles against ES2022, which has no URL global.
-declare const URL: {
-  new (input: string, base?: string): {
-    readonly protocol: string;
-    readonly hostname: string;
-    readonly pathname: string;
-  };
-};
-
 export type HostAndPath =
   | { readonly kind: "absolute"; readonly host: string; readonly path: string }
   | { readonly kind: "path"; readonly path: string };
@@ -103,22 +94,25 @@ export function hostAndPath(raw: string): HostAndPath | undefined {
   const trimmed = raw.trim();
   if (!trimmed) return undefined;
 
+  if (trimmed.startsWith("/") && !trimmed.startsWith("//")) {
+    try {
+      const url = new URL(trimmed, PATH_ONLY_BASE);
+      return { kind: "path", path: url.pathname };
+    } catch {
+      return undefined;
+    }
+  }
+
+  if (!/^https?:\/\//i.test(trimmed)) return undefined;
   try {
     const url = new URL(trimmed);
     if (url.protocol !== "http:" && url.protocol !== "https:") return undefined;
+    if (!url.hostname) return undefined;
     return {
       kind: "absolute",
       host: url.hostname.toLowerCase(),
       path: url.pathname,
     };
-  } catch {
-    // `new URL` throws for a pathname. The path-only branch below handles that.
-  }
-
-  if (!trimmed.startsWith("/") || trimmed.startsWith("//")) return undefined;
-  try {
-    const url = new URL(trimmed, PATH_ONLY_BASE);
-    return { kind: "path", path: url.pathname };
   } catch {
     return undefined;
   }
