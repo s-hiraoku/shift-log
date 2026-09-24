@@ -84,9 +84,91 @@ export function titlePolicyFor(config: PermissionsConfig, name: string): TitlePo
   return "full";
 }
 
+const PATH_ONLY_BASE = "https://urlpath.invalid";
+
+export type HostAndPath =
+  | { readonly kind: "absolute"; readonly host: string; readonly path: string }
+  | { readonly kind: "path"; readonly path: string };
+
+export function hostAndPath(raw: string): HostAndPath | undefined {
+  const trimmed = raw.trim();
+  if (!trimmed) return undefined;
+
+  if (trimmed.startsWith("/") && !trimmed.startsWith("//")) {
+    try {
+      const url = new URL(trimmed, PATH_ONLY_BASE);
+      return { kind: "path", path: url.pathname };
+    } catch {
+      return undefined;
+    }
+  }
+
+  if (!/^https?:\/\//i.test(trimmed)) return undefined;
+  try {
+    const url = new URL(trimmed);
+    if (url.protocol !== "http:" && url.protocol !== "https:") return undefined;
+    if (!url.hostname) return undefined;
+    return {
+      kind: "absolute",
+      host: url.hostname.toLowerCase(),
+      path: url.pathname,
+    };
+  } catch {
+    return undefined;
+  }
+}
+
 export function omitTitleFields<
-  E extends { summary?: unknown; site?: unknown; meta?: unknown },
->(event: E): Omit<E, "summary" | "site" | "meta"> {
-  const { summary: _summary, site: _site, meta: _meta, ...rest } = event;
+  E extends { summary?: unknown; site?: unknown; meta?: unknown; urlPath?: unknown },
+>(event: E): Omit<E, "summary" | "site" | "meta" | "urlPath"> {
+  const { summary: _summary, site: _site, meta: _meta, urlPath: _urlPath, ...rest } = event;
   return rest;
+}
+
+type RestrictedEvent = {
+  type: string;
+  app?: string;
+  site?: string;
+  summary?: string;
+  meta?: unknown;
+  urlPath?: string;
+};
+
+export function omitRestrictedFields<E extends RestrictedEvent>(
+  event: E,
+  permissions: PermissionsConfig,
+): E | Omit<E, "urlPath"> | Omit<E, "summary" | "site" | "meta" | "urlPath"> {
+  let keptPath: string | undefined;
+  if (event.type === "browser_navigation" && typeof event.urlPath === "string") {
+    const parsed = hostAndPath(event.urlPath);
+    if (parsed?.kind === "absolute") {
+      const labeled = typeof event.site === "string" ? event.site.trim().toLowerCase() : "";
+      const hostDisallowed = !isSourceAllowed(permissions, "sites", parsed.host);
+      const hostDisagrees = labeled !== "" && labeled !== parsed.host;
+      if (!hostDisallowed && !hostDisagrees) keptPath = parsed.path;
+    } else if (parsed?.kind === "path") {
+      keptPath = parsed.path;
+    }
+  }
+
+  const copy: E = keptPath === undefined ? event : { ...event, urlPath: keptPath };
+  if (copy.app && titlePolicyFor(permissions, copy.app) === "app_only") {
+    return omitTitleFields(copy);
+  }
+
+  const siteText = typeof event.site === "string" ? event.site.trim() : "";
+  const privacyUnknown =
+    typeof event.meta === "object" &&
+    event.meta !== null &&
+    (event.meta as { privateBrowsingUnknown?: unknown }).privateBrowsingUnknown === true;
+  const dropPath =
+    privacyUnknown ||
+    keptPath === undefined ||
+    (event.type === "browser_navigation" &&
+      (siteText === "" || !isSourceAllowed(permissions, "sites", siteText)));
+  if (dropPath) {
+    const { urlPath: _urlPath, ...rest } = copy;
+    return rest;
+  }
+  return copy;
 }
