@@ -172,8 +172,10 @@ async function observeMac(exec: ExecFileFn): Promise<FrontWindow | null> {
   });
 }
 
+// Inside `tell application`, `tab` is the browser tab, not the tab character.
 function safariTabScript(): string {
   return [
+    "set sep to ASCII character 9",
     'tell application "Safari"',
     '  set m to "unknown"',
     "  try",
@@ -183,13 +185,16 @@ function safariTabScript(): string {
     "  try",
     "    set u to URL of front document",
     "  end try",
-    "  return m & tab & u",
+    "  return m & sep & u",
     "end tell",
   ].join("\n");
 }
 
 function chromeTabScript(app: string): string {
-  return `tell application "${app}" to return (mode of front window as string) & tab & (URL of active tab of front window)`;
+  return [
+    "set sep to ASCII character 9",
+    `tell application "${app}" to return (mode of front window as string) & sep & (URL of active tab of front window)`,
+  ].join("\n");
 }
 
 function readTabProbe(stdout: string): {

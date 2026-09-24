@@ -159,6 +159,32 @@ describe("observeFrontWindow", () => {
     expect(front?.site).toBe("github.com");
   });
 
+  it("builds the mode and URL separator outside the tell", async () => {
+    const scripts: string[] = [];
+    const exec: ExecFileFn = async (file, args) => {
+      if (file === "osascript" && args[1]?.includes("System Events")) {
+        const app = scripts.length === 0 ? "Google Chrome" : "Safari";
+        return { stdout: `${app}\tExample\n`, stderr: "" };
+      }
+      if (file === "osascript") {
+        scripts.push(args[1] ?? "");
+        return { stdout: "normal\thttps://example.com/docs\n", stderr: "" };
+      }
+      throw new Error(`unexpected ${file} ${args.join(" ")}`);
+    };
+    await observeFrontWindow({ platform: "darwin", exec });
+    await observeFrontWindow({ platform: "darwin", exec });
+    expect(scripts).toHaveLength(2);
+    for (const script of scripts) {
+      const tellAt = script.indexOf("tell application");
+      expect(tellAt).toBeGreaterThan(0);
+      expect(script.slice(0, tellAt)).toContain("ASCII character 9");
+      expect(script.slice(tellAt)).not.toMatch(/&\s*tab\s*&/);
+    }
+    expect(scripts[0]).toContain('tell application "Google Chrome"');
+    expect(scripts[1]).toContain('tell application "Safari"');
+  });
+
   it("omits urlPath when the Chrome privacy probe fails", async () => {
     const exec: ExecFileFn = async (file, args) => {
       if (file === "osascript" && args[1]?.includes("System Events")) {
