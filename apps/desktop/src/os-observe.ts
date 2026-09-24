@@ -1,3 +1,4 @@
+import { hostAndPath } from "@shift-log/schema";
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 
@@ -14,6 +15,7 @@ export type FrontWindow = {
   app: string;
   title: string;
   site?: string;
+  urlPath?: string;
   privateBrowsing?: boolean;
   meta?: WindowTitleMeta;
 };
@@ -95,13 +97,9 @@ const defaultExec: ExecFileFn = async (file, args) => {
 };
 
 function hostnameFromUrl(raw: string): string | undefined {
-  try {
-    const url = new URL(raw.trim());
-    if (url.protocol !== "http:" && url.protocol !== "https:") return undefined;
-    return url.hostname.toLowerCase();
-  } catch {
-    return undefined;
-  }
+  const parsed = hostAndPath(raw);
+  if (parsed?.kind !== "absolute") return undefined;
+  return parsed.host;
 }
 
 /** Best-effort host from a browser window title (never treats the title as keystrokes). */
@@ -133,24 +131,33 @@ async function observeMac(exec: ExecFileFn): Promise<FrontWindow | null> {
   if (!app) return null;
   const title = rest.join("\t").trim();
   let site = siteFromTitle(title, app);
+  let urlPath: string | undefined;
   try {
     if (/^safari$/i.test(app)) {
       const url = await exec("osascript", [
         "-e",
         'tell application "Safari" to return URL of front document',
       ]);
-      site = hostnameFromUrl(url.stdout) ?? site;
+      const parsed = hostAndPath(url.stdout);
+      if (parsed?.kind === "absolute") {
+        site = parsed.host;
+        urlPath = parsed.path;
+      }
     } else if (/google chrome|chromium|brave browser/i.test(app)) {
       const url = await exec("osascript", [
         "-e",
         `tell application "${app}" to return URL of active tab of front window`,
       ]);
-      site = hostnameFromUrl(url.stdout) ?? site;
+      const parsed = hostAndPath(url.stdout);
+      if (parsed?.kind === "absolute") {
+        site = parsed.host;
+        urlPath = parsed.path;
+      }
     }
   } catch {
     // Automation permission denied — fall back to title heuristic.
   }
-  return withTitleMeta({ app, title, site });
+  return withTitleMeta({ app, title, site, ...(urlPath ? { urlPath } : {}) });
 }
 
 async function observeLinux(exec: ExecFileFn): Promise<FrontWindow | null> {

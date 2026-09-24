@@ -185,6 +185,91 @@ describe("DesktopCollector", () => {
     expect(window.events.some((e) => e.type === "typing_presence")).toBe(false);
   });
 
+  it("copies urlPath onto browser_navigation only", () => {
+    const collector = new DesktopCollector(
+      PermissionsConfigSchema.parse({
+        enabled: true,
+        memories_enabled: true,
+      }),
+      "http://localhost:8787",
+      "dev-token",
+    );
+    emitOsTick(
+      collector,
+      {
+        app: "Google Chrome",
+        title: "shift-log/pull/98",
+        site: "github.com",
+        urlPath: "/s-hiraoku/shift-log/pull/98",
+      },
+      null,
+    );
+    const window = collector.drainWindow(new Date());
+    const nav = window.events.find((event) => event.type === "browser_navigation");
+    const appSwitch = window.events.find((event) => event.type === "app_switch");
+    expect(nav?.urlPath).toBe("/s-hiraoku/shift-log/pull/98");
+    expect(appSwitch).toMatchObject({ type: "app_switch", app: "Google Chrome" });
+    expect(appSwitch).not.toHaveProperty("urlPath");
+  });
+
+  it("drops navigation urlPath, summary, and site when title_policy is app_only", () => {
+    const collector = new DesktopCollector(
+      PermissionsConfigSchema.parse({
+        enabled: true,
+        memories_enabled: true,
+        title_policy: { "Google Chrome": "app_only" },
+      }),
+      "http://localhost:8787",
+      "dev-token",
+    );
+    emitOsTick(
+      collector,
+      {
+        app: "Google Chrome",
+        title: "shift-log/pull/98",
+        site: "github.com",
+        urlPath: "/s-hiraoku/shift-log/pull/98",
+      },
+      null,
+    );
+    const nav = collector.drainWindow(new Date()).events.find((event) => event.type === "browser_navigation");
+    expect(nav).toEqual({
+      id: expect.any(String),
+      ts: expect.any(String),
+      type: "browser_navigation",
+      device: "desk",
+      app: "Google Chrome",
+    });
+  });
+
+  it("drops the navigation event when the site is excluded", () => {
+    const collector = new DesktopCollector(
+      PermissionsConfigSchema.parse({
+        enabled: true,
+        memories_enabled: true,
+        sites: { mode: "exclude_listed", exclude: ["github.com"], include_only: [] },
+      }),
+      "http://localhost:8787",
+      "dev-token",
+    );
+    emitOsTick(collector, { app: "Cursor", title: "shift-log" }, null);
+    emitOsTick(
+      collector,
+      {
+        app: "Google Chrome",
+        title: "shift-log/pull/98",
+        site: "github.com",
+        urlPath: "/s-hiraoku/shift-log/pull/98",
+      },
+      { app: "Cursor", title: "shift-log" },
+    );
+    const window = collector.drainWindow(new Date());
+    expect(window.events.map((event) => event.type)).toEqual(["app_switch", "front_window_summary"]);
+    expect(window.events.map((event) => event.app)).toEqual(["Cursor", "Cursor"]);
+    expect(window.events.some((event) => event.type === "browser_navigation")).toBe(false);
+    expect(JSON.stringify(window.events)).not.toContain("/s-hiraoku/shift-log/pull/98");
+  });
+
   it("copies interpreted editor and terminal title meta onto events", () => {
     const collector = new DesktopCollector(
       PermissionsConfigSchema.parse({

@@ -108,12 +108,31 @@ describe("observeFrontWindow", () => {
         return { stdout: "Safari\tComputer History\n", stderr: "" };
       }
       if (file === "osascript" && args[1]?.includes("Safari")) {
-        return { stdout: "https://learn.chatgpt.com/docs\n", stderr: "" };
+        return { stdout: "https://learn.chatgpt.com/docs?token=secret#section\n", stderr: "" };
       }
       throw new Error(`unexpected ${file} ${args.join(" ")}`);
     };
     const front = await observeFrontWindow({ platform: "darwin", exec });
     expect(front?.app).toBe("Safari");
     expect(front?.site).toBe("learn.chatgpt.com");
+    expect(front?.urlPath).toBe("/docs");
+  });
+
+  it("reads a Chrome tab pathname without the query or fragment", async () => {
+    const exec: ExecFileFn = async (file, args) => {
+      if (file === "osascript" && args[1]?.includes("System Events")) {
+        return { stdout: "Google Chrome\tPull request\n", stderr: "" };
+      }
+      if (file === "osascript" && args[1]?.includes("Google Chrome")) {
+        return {
+          stdout: "https://github.com/s-hiraoku/shift-log/pull/98?token=secret#files\n",
+          stderr: "",
+        };
+      }
+      throw new Error(`unexpected ${file} ${args.join(" ")}`);
+    };
+    const front = await observeFrontWindow({ platform: "darwin", exec });
+    expect(front?.site).toBe("github.com");
+    expect(front?.urlPath).toBe("/s-hiraoku/shift-log/pull/98");
   });
 });

@@ -1,8 +1,7 @@
 import {
   canCollect,
   isSourceAllowed,
-  omitTitleFields,
-  titlePolicyFor,
+  omitRestrictedFields,
   type InteractionEvent,
   type PermissionsConfig,
   type WindowUpload,
@@ -88,9 +87,8 @@ export class DesktopCollector {
     if (event.meta?.privateBrowsing === true) {
       return;
     }
-    if (event.app && titlePolicyFor(this.permissions, event.app) === "app_only") {
-      event = omitTitleFields(event);
-    } else if (event.type === "typing_presence" && typeof event.meta?.keyText === "string") {
+    event = omitRestrictedFields(event, this.permissions);
+    if (event.type === "typing_presence" && "meta" in event && typeof event.meta?.keyText === "string") {
       const { keyText: _removed, ...rest } = event.meta;
       event = { ...event, meta: rest };
     }
@@ -243,6 +241,7 @@ export function emitOsTick(
       app: observed.app,
       site: observed.site,
       summary: observed.title.slice(0, 200) || observed.site,
+      ...(observed.urlPath ? { urlPath: observed.urlPath } : {}),
       ...(meta ? { meta } : {}),
     });
   } else if (!last || last.title !== observed.title) {
