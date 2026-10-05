@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Claude Code cloud session bootstrap: latest Node.js, deps, schema build, .env,
+# Claude Code cloud session bootstrap: Node from .nvmrc, deps, schema build, .env,
 # and a Chrome path for the verify-shift-log helpers. Idempotent; local
 # sessions skip it.
 set -euo pipefail
@@ -10,8 +10,8 @@ fi
 
 cd "${CLAUDE_PROJECT_DIR:-$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)}"
 
-# Latest Node.js release via the image's nvm (the image defaults to Node 22).
-# Later Bash calls get it through CLAUDE_ENV_FILE.
+# Node.js from .nvmrc (the LTS line CI uses) via the image's nvm; the image
+# defaults to Node 22. Later Bash calls get it through CLAUDE_ENV_FILE.
 export NVM_DIR="${NVM_DIR:-/opt/nvm}"
 if [[ -s "$NVM_DIR/nvm.sh" ]]; then
   # nvm.sh is not written for `set -eu`.
@@ -19,9 +19,10 @@ if [[ -s "$NVM_DIR/nvm.sh" ]]; then
   # shellcheck disable=SC1091
   . "$NVM_DIR/nvm.sh" --no-use
   set -e
-  nvm install node >/dev/null
-  nvm alias default node >/dev/null
-  node_bin="$(dirname "$(nvm which node)")"
+  node_version="$(cat .nvmrc)"
+  nvm install "$node_version" >/dev/null
+  nvm alias default "$node_version" >/dev/null
+  node_bin="$(dirname "$(nvm which "$node_version")")"
   set -u
   export PATH="$node_bin:$PATH"
   if [[ -n "${CLAUDE_ENV_FILE:-}" ]]; then
