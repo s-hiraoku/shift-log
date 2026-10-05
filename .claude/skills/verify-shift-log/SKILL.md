@@ -11,6 +11,7 @@ The maintained skill lives at [`.cursor/skills/verify-shift-log/SKILL.md`](../..
 
 `.claude/hooks/session-start.sh` runs on every cloud session start (`CLAUDE_CODE_REMOTE=true`):
 
+- installs the latest Node.js release with the image's nvm (`/opt/nvm`; the image defaults to Node 22) and puts it first on `PATH` for later Bash calls,
 - installs the `packageManager` pnpm with `npm install -g` when the global one differs (not `corepack enable`: Node 22's corepack cannot run pnpm 12, and its shim replaces a working pnpm),
 - `pnpm install --frozen-lockfile` and `pnpm --filter @shift-log/schema build`,
 - `scripts/ensure-dev-env.sh` (creates `.env` from `.env.example`, never overwrites),
