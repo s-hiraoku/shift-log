@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Claude Code cloud session bootstrap: latest Node.js, deps, schema build, .env,
-# and a Chrome
-# path for the verify-shift-log helpers. Idempotent; local sessions skip it.
+# and a Chrome path for the verify-shift-log helpers. Idempotent; local
+# sessions skip it.
 set -euo pipefail
 
 if [[ "${CLAUDE_CODE_REMOTE:-}" != "true" ]]; then
