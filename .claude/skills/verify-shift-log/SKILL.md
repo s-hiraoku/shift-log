@@ -28,6 +28,8 @@ pnpm typecheck
 
 `pnpm lint` passes, but in `apps/web` it is only a typecheck: `next lint` no longer exists in Next 16 and the script falls back to `tsc`.
 
+To measure the content of the LLM summary rather than the UI, use the `eval-shift-log` skill.
+
 ## End-to-end run
 
 ```bash

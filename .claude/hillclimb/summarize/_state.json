@@ -1,0 +1,104 @@
+{
+  "flow": "summarize",
+  "description": "ShiftLog ten-minute summary: WindowUpload -> sanitizeWindowUpload -> summarizeTenMinuteWindow (services/api/src/jobs/llm.ts buildPrompt)",
+  "split_seed": 20261005,
+  "train_ids": [
+    "browser_pr_review",
+    "browser_video_break",
+    "cont_meeting_after_code",
+    "cont_same_store",
+    "dual_code_slack_mobile",
+    "dual_zoom_maps",
+    "focus_code_store",
+    "focus_terminal_tests",
+    "sensitive_private_browsing",
+    "sensitive_typing_only",
+    "sparse_pause",
+    "sparse_single_event",
+    "switch_mail_calendar",
+    "switch_many_apps"
+  ],
+  "test_ids": [
+    "browser_docs_reading",
+    "cont_same_pr_review",
+    "cont_switch_topic",
+    "dual_mobile_only",
+    "focus_figma",
+    "focus_notion_spec",
+    "sensitive_key_text",
+    "sparse_notifications",
+    "switch_code_docs",
+    "switch_ghostty_slack"
+  ],
+  "reps": 2,
+  "metrics": [
+    {
+      "id": "pass",
+      "label": "pass",
+      "kind": "binary"
+    },
+    {
+      "id": "topical",
+      "label": "topical",
+      "kind": "binary"
+    },
+    {
+      "id": "grounded",
+      "label": "grounded",
+      "kind": "binary"
+    },
+    {
+      "id": "private",
+      "label": "private",
+      "kind": "binary"
+    },
+    {
+      "id": "schema",
+      "label": "schema",
+      "kind": "binary"
+    },
+    {
+      "id": "entities",
+      "label": "entity recall",
+      "kind": "float",
+      "scale": 1
+    },
+    {
+      "id": "continuity",
+      "label": "continuity",
+      "kind": "binary"
+    },
+    {
+      "id": "llm_used",
+      "label": "llm used",
+      "kind": "binary"
+    }
+  ],
+  "goal": {
+    "target": "pass",
+    "direction": "higher",
+    "hold": [
+      "grounded",
+      "private",
+      "schema",
+      "llm_used"
+    ]
+  },
+  "scope": [
+    "services/api/src/jobs/llm.ts: buildPrompt text and the system message",
+    "SHIFTLOG_LLM_MODEL (model choice)"
+  ],
+  "off_limits": [
+    "services/api/eval/**",
+    "services/api/src/lib/sanitize.ts",
+    "services/api/src/jobs/entities.ts",
+    "README privacy promises (no screenshots, no key text, private browsing excluded)"
+  ],
+  "harness_paths": [
+    "services/api/eval/summarize/run.ts",
+    "services/api/eval/summarize/grade.ts",
+    "services/api/eval/summarize/cases.ts"
+  ],
+  "approve_each_round": false,
+  "split_note": "Random per tags[0] with the seed above, then cont_same_store and cont_switch_topic swapped so train and test each hold one same-work and one different-work continuation case."
+}
