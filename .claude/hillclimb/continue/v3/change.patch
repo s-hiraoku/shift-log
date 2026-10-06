@@ -1,0 +1,19 @@
+--- a/services/api/src/lib/continue-context.ts
++++ b/services/api/src/lib/continue-context.ts
+@@ -26,9 +26,14 @@
+ 
+ export function extractKeywords(prompt: string): string[] {
+   // Japanese has no spaces: split on hiragana (particles, okurigana) and keep
+-  // katakana/kanji runs, so 「仕様書の続きを書きたい」 yields 仕様書.
+-  const tokens =
++  // katakana/kanji runs, so 「仕様書の続きを書きたい」 yields 仕様書. A run that
++  // mixes scripts also yields its katakana and kanji parts (テスト直 → テスト).
++  const runs =
+     prompt.match(/[A-Za-z0-9][A-Za-z0-9_./#-]{1,}|[\u30a0-\u30ff\u4e00-\u9fff]{2,}/gu) ?? [];
++  const tokens = runs.flatMap((run) => {
++    const parts = run.match(/[\u30a0-\u30ff]{2,}|[\u4e00-\u9fff]{2,}/gu) ?? [];
++    return parts.length > 1 || (parts[0] && parts[0] !== run) ? [run, ...parts] : [run];
++  });
+   const seen = new Set<string>();
+   const keywords: string[] = [];
+   for (const token of tokens) {

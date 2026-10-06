@@ -40,28 +40,6 @@ export function extractKeywords(prompt: string): string[] {
   return keywords;
 }
 
-/**
- * Order keyword hits so memories matching more of the prompt's keywords come
- * first; ties keep recency (each per-keyword list is already newest first).
- */
-export function rankKeywordHits(hitsByKeyword: MemoryRecord[][]): MemoryRecord[] {
-  const scored = new Map<string, { memory: MemoryRecord; matches: number }>();
-  for (const hits of hitsByKeyword) {
-    for (const memory of hits) {
-      const entry = scored.get(memory.id);
-      if (entry) entry.matches += 1;
-      else scored.set(memory.id, { memory, matches: 1 });
-    }
-  }
-  return [...scored.values()]
-    .sort(
-      (a, b) =>
-        b.matches - a.matches ||
-        b.memory.front_matter.window_start.localeCompare(a.memory.front_matter.window_start),
-    )
-    .map((entry) => entry.memory);
-}
-
 export function mergeContinueMemories(input: {
   recent: MemoryRecord[];
   keywordHits: MemoryRecord[];

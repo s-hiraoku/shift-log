@@ -165,7 +165,7 @@ Vercel + Postgres（Neon など）では、ウィンドウタイトルに含ま�
 pnpm test
 ```
 
-Claude Code のクラウドセッションでは `.claude/hooks/session-start.sh` が依存導入・schema ビルド・`.env` 作成を済ませます。UI まで通す検証は `verify-shift-log` スキル（[`.claude/skills/verify-shift-log/SKILL.md`](.claude/skills/verify-shift-log/SKILL.md)）を使います。
+Claude Code のクラウドセッションでは `.claude/hooks/session-start.sh` が依存導入・schema ビルド・`.env` 作成を済ませます。UI まで通す検証は `verify-shift-log` スキル（[`.claude/skills/verify-shift-log/SKILL.md`](.claude/skills/verify-shift-log/SKILL.md)）を使います。十分サマリ（LLM 要約）の質は `eval-shift-log` スキル（[`.claude/skills/eval-shift-log/SKILL.md`](.claude/skills/eval-shift-log/SKILL.md)）の eval で測り、プロンプト変更は train/test 分割でヒルクライムします。
 
 ## レビュー
 
