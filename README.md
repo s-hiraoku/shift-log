@@ -165,6 +165,8 @@ Vercel + Postgres（Neon など）では、ウィンドウタイトルに含ま�
 pnpm test
 ```
 
+Claude Code のクラウドセッションでは `.claude/hooks/session-start.sh` が依存導入・schema ビルド・`.env` 作成を済ませます。UI まで通す検証は `verify-shift-log` スキル（[`.claude/skills/verify-shift-log/SKILL.md`](.claude/skills/verify-shift-log/SKILL.md)）を使います。
+
 ## レビュー
 
 PR は CodeRabbit と Cursor Bugbot で自動レビューされます。
