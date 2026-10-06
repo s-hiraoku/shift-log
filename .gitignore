@@ -15,9 +15,8 @@ apps/mobile/.expo
 data
 .tmp
 
-# eval runs (.claude/hillclimb/<flow>/): keep _state.json and metrics.md, not run output
-.claude/hillclimb/*/baseline/
-.claude/hillclimb/*/v[0-9]*/
+# eval runs (.claude/hillclimb/<flow>/): keep results and round records, not transcripts or rendered reports
+.claude/hillclimb/*/*/traces/
 .claude/hillclimb/*/report.html
 .claude/hillclimb/*/state.json
 .claude/hillclimb/*/trajectory/

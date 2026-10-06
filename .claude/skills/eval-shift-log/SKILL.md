@@ -1,9 +1,14 @@
 ---
 name: eval-shift-log
-description: Measure and improve ShiftLog's ten-minute LLM summary with the committed eval (24 cases, programmatic graders, fixed train/test split). Use before and after changing the summary prompt or SHIFTLOG_LLM_MODEL, when hill-climbing the prompt, or when adding eval cases.
+description: Measure and improve ShiftLog with the committed evals — the ten-minute LLM summary and 「続きやって」 memory ranking — using programmatic graders and fixed train/test splits. Use before and after changing the summary prompt, SHIFTLOG_LLM_MODEL, or the continue endpoint's keyword/ranking code, when hill-climbing either, or when adding eval cases.
 ---
 
-# ShiftLog summary eval and hill-climb
+# ShiftLog evals and hill-climb
+
+Two flows have an eval, each with its own directory under `.claude/hillclimb/`:
+
+- `summarize`: the ten-minute LLM summary (costs money in `llm` mode; below)
+- `continue`: which memories 「続きやって」 puts first (deterministic and free; see the last section)
 
 The ten-minute summary (`services/api/src/jobs/llm.ts`, `buildPrompt`) is the only LLM call in ShiftLog. This eval runs each case through the production path (`sanitizeWindowUpload` → `summarizeTenMinuteWindow`) and grades the stored memory. For UI and API end-to-end checks use `verify-shift-log` instead; this skill is about the content of the summary.
 
@@ -66,3 +71,13 @@ A cost goal works the same way: swap `SHIFTLOG_LLM_MODEL`, hold `pass` within no
 ## Add cases
 
 Good sources, in order: a summary someone complained about (an issue or bug report), then a hand-written window for a situation the set lacks. Write expectations by hand, never from a model's output. Never copy real windows: rewrite them as synthetic events with no personal data. After adding cases, add them to `train_ids` or `test_ids` (keep `tags[0]` balanced), run `pnpm -r run test` so `grade.test.ts` proves the new oracle passes, and re-run the baseline.
+
+## 「続きやって」 ranking eval
+
+`services/api/eval/continue/` sends 31 prompts through the real `POST /v1/agent/continue` (`createApp` + `app.request`) against the summarize cases stored as memories. Kinds (`tags[0]`): `topic_ja`, `topic_en`, `generic` (no topic: the newest memory should come first), `nomatch` (nothing should match by keyword).
+
+```bash
+pnpm run eval:continue --variant v<N>   # from services/api; no LLM, no cost, 1 rep
+```
+
+Metrics: `hit1` (headline), `recall3`, `kw_precision` (guardrail). In scope: `services/api/src/lib/continue-context.ts` and the keyword loop in `app.ts`. Off limits: the eval files, the response shape and `context_only`, and `listMemories` semantics shared with the timeline. The hill-climb rules above apply unchanged; `.claude/hillclimb/continue/narrative.md` holds the round table and `vN/change.md` the reason for each round. Test is 13/13 since v2, so add harder prompts (paraphrases that share no words with the memory) before another round.

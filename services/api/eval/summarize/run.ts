@@ -1,7 +1,7 @@
 /**
  * Eval runner for the ten-minute summary flow.
  *
- *   pnpm --filter @shift-log/api eval:summarize -- --mode fallback --variant baseline
+ *   pnpm run eval:summarize --mode fallback --variant baseline   (from services/api)
  *
  * Each case goes through the production path (sanitizeWindowUpload →
  * summarizeTenMinuteWindow) against a fresh in-memory store. The LLM call is the
@@ -29,6 +29,7 @@ import { summarizeTenMinuteWindow } from "../../src/jobs/summarize.js";
 import { sanitizeWindowUpload } from "../../src/lib/sanitize.js";
 import { MemoryStore } from "../../src/lib/store.js";
 import { CASES, type EvalCase } from "./cases.js";
+import { formatMeanCi, loadSplit, splitSummary } from "../stats.js";
 import { gradeCase, METRICS } from "./grade.js";
 
 type Mode = "llm" | "fallback" | "oracle" | "null";
@@ -202,22 +203,6 @@ function withTimeout<T>(p: Promise<T>, s: number): Promise<T> {
   return Promise.race([p, ceiling]).finally(() => clearTimeout(timer));
 }
 
-// ── stats ─────────────────────────────────────────────────────────────────
-function meanCi(xs: number[]): { mean: number; ci95: number; n: number } {
-  const n = xs.length;
-  if (n === 0) return { mean: NaN, ci95: NaN, n };
-  const mean = xs.reduce((a, b) => a + b, 0) / n;
-  const variance = n > 1 ? xs.reduce((a, b) => a + (b - mean) ** 2, 0) / (n - 1) : 0;
-  return { mean, ci95: 1.96 * Math.sqrt(variance / n), n };
-}
-
-function loadSplit(): { train: Set<string>; test: Set<string> } | null {
-  const p = join(flowDir, "_state.json");
-  if (!existsSync(p)) return null;
-  const s = JSON.parse(readFileSync(p, "utf8"));
-  return { train: new Set(s.train_ids ?? []), test: new Set(s.test_ids ?? []) };
-}
-
 // ── main ──────────────────────────────────────────────────────────────────
 async function main() {
   const opts = parseArgs(process.argv.slice(2));
@@ -318,30 +303,14 @@ async function main() {
   const rows = existsSync(resultsPath)
     ? readFileSync(resultsPath, "utf8").split("\n").filter(Boolean).map((l) => JSON.parse(l))
     : [];
-  const split = loadSplit();
-  const pick = (ids: Set<string> | null) => (ids ? rows.filter((r) => ids.has(r.prompt_id)) : rows);
-  const summary: Record<string, unknown> = { mode: opts.mode, rows: rows.length, errors };
-  for (const [name, ids] of [
-    ["all", null],
-    ["train", split?.train ?? null],
-    ["test", split?.test ?? null],
-  ] as const) {
-    if (name !== "all" && !ids) continue;
-    const subset = pick(ids);
-    summary[name] = Object.fromEntries(
-      METRICS.map((m) => [m.id, meanCi(subset.map((r) => r.grade[m.id] as number))]),
-    );
-  }
+  const metricIds = METRICS.map((m) => m.id);
+  const splits = splitSummary(rows, metricIds, loadSplit(flowDir));
+  const summary = { mode: opts.mode, rows: rows.length, errors, ...splits };
   writeFileSync(join(opts.outDir, "summary.json"), JSON.stringify(summary, null, 2));
-
-  const fmt = (s: { mean: number; ci95: number; n: number }) =>
-    `${(s.mean * 100).toFixed(1)}% ±${(s.ci95 * 100).toFixed(1)} (n=${s.n})`;
-  for (const name of ["all", "train", "test"]) {
-    const s = summary[name] as Record<string, { mean: number; ci95: number; n: number }> | undefined;
-    if (!s) continue;
+  for (const [name, s] of Object.entries(splits)) {
     console.log(
       `${opts.variant} ${opts.mode} ${name.padEnd(5)} ` +
-        METRICS.map((m) => `${m.id}=${fmt(s[m.id]!)}`).join("  "),
+        metricIds.map((id) => `${id}=${formatMeanCi(s[id]!)}`).join("  "),
     );
   }
   if (errors > 0) console.log(`${errors} attempt(s) not scored, see ${errorsPath}`);
