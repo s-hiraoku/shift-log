@@ -25,10 +25,8 @@ const STOPWORDS = new Set([
 ]);
 
 export function extractKeywords(prompt: string): string[] {
-  // Japanese has no spaces: split on hiragana (particles, okurigana) and keep
-  // katakana/kanji runs, so 「仕様書の続きを書きたい」 yields 仕様書.
   const tokens =
-    prompt.match(/[A-Za-z0-9][A-Za-z0-9_./#-]{1,}|[\u30a0-\u30ff\u4e00-\u9fff]{2,}/gu) ?? [];
+    prompt.match(/[A-Za-z0-9][A-Za-z0-9_./#-]{1,}|[\u3040-\u30ff\u4e00-\u9fff]{2,}/gu) ?? [];
   const seen = new Set<string>();
   const keywords: string[] = [];
   for (const token of tokens) {
@@ -38,28 +36,6 @@ export function extractKeywords(prompt: string): string[] {
     keywords.push(key);
   }
   return keywords;
-}
-
-/**
- * Order keyword hits so memories matching more of the prompt's keywords come
- * first; ties keep recency (each per-keyword list is already newest first).
- */
-export function rankKeywordHits(hitsByKeyword: MemoryRecord[][]): MemoryRecord[] {
-  const scored = new Map<string, { memory: MemoryRecord; matches: number }>();
-  for (const hits of hitsByKeyword) {
-    for (const memory of hits) {
-      const entry = scored.get(memory.id);
-      if (entry) entry.matches += 1;
-      else scored.set(memory.id, { memory, matches: 1 });
-    }
-  }
-  return [...scored.values()]
-    .sort(
-      (a, b) =>
-        b.matches - a.matches ||
-        b.memory.front_matter.window_start.localeCompare(a.memory.front_matter.window_start),
-    )
-    .map((entry) => entry.memory);
 }
 
 export function mergeContinueMemories(input: {

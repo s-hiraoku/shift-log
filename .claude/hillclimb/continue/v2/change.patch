@@ -1,0 +1,63 @@
+diff --git a/services/api/src/app.ts b/services/api/src/app.ts
+index 6b19466..1c038e6 100644
+--- a/services/api/src/app.ts
++++ b/services/api/src/app.ts
+@@ -11,7 +11,7 @@ import {
+ import { requireAuth } from "./middleware/auth.js";
+ import { rateLimit } from "./middleware/rate-limit.js";
+ import { audit } from "./lib/audit.js";
+-import { extractKeywords, mergeContinueMemories } from "./lib/continue-context.js";
++import { extractKeywords, mergeContinueMemories, rankKeywordHits } from "./lib/continue-context.js";
+ import { sanitizeWindowUpload } from "./lib/sanitize.js";
+ import { isRawWindowExpired, purgeAllTenants, storeFor, type MemoryStore } from "./lib/store.js";
+ import {
+@@ -235,15 +235,9 @@ export function createApp() {
+     const store = tenant(c);
+     const range = { since: body.since, until: body.until };
+     const recent = store.listMemories({ limit: body.limit, ...range });
+-    const keywordHits: typeof recent = [];
+-    const seen = new Set<string>();
+-    for (const q of extractKeywords(body.prompt)) {
+-      for (const memory of store.listMemories({ q, limit: body.limit, ...range })) {
+-        if (seen.has(memory.id)) continue;
+-        seen.add(memory.id);
+-        keywordHits.push(memory);
+-      }
+-    }
++    const keywordHits = rankKeywordHits(
++      extractKeywords(body.prompt).map((q) => store.listMemories({ q, limit: body.limit, ...range })),
++    );
+     const memories = mergeContinueMemories({
+       recent,
+       keywordHits,
+--- a/services/api/src/lib/continue-context.ts
++++ b/services/api/src/lib/continue-context.ts
+@@ -40,6 +40,28 @@
+   return keywords;
+ }
+ 
++/**
++ * Order keyword hits so memories matching more of the prompt's keywords come
++ * first; ties keep recency (each per-keyword list is already newest first).
++ */
++export function rankKeywordHits(hitsByKeyword: MemoryRecord[][]): MemoryRecord[] {
++  const scored = new Map<string, { memory: MemoryRecord; matches: number }>();
++  for (const hits of hitsByKeyword) {
++    for (const memory of hits) {
++      const entry = scored.get(memory.id);
++      if (entry) entry.matches += 1;
++      else scored.set(memory.id, { memory, matches: 1 });
++    }
++  }
++  return [...scored.values()]
++    .sort(
++      (a, b) =>
++        b.matches - a.matches ||
++        b.memory.front_matter.window_start.localeCompare(a.memory.front_matter.window_start),
++    )
++    .map((entry) => entry.memory);
++}
++
+ export function mergeContinueMemories(input: {
+   recent: MemoryRecord[];
+   keywordHits: MemoryRecord[];

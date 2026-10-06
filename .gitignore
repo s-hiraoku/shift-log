@@ -14,3 +14,9 @@ apps/desktop/out
 apps/mobile/.expo
 data
 .tmp
+
+# eval runs (.claude/hillclimb/<flow>/): keep results and round records, not transcripts or rendered reports
+.claude/hillclimb/*/*/traces/
+.claude/hillclimb/*/report.html
+.claude/hillclimb/*/state.json
+.claude/hillclimb/*/trajectory/
