@@ -1,0 +1,105 @@
+{
+  "flow": "continue",
+  "description": "「続きやって」: POST /v1/agent/continue ranking (services/api/src/lib/continue-context.ts) over the summarize-eval memory library",
+  "split_seed": 20261006,
+  "train_ids": [
+    "en_pr93",
+    "en_rate_limit",
+    "gen_en",
+    "gen_polite",
+    "gen_sagyou",
+    "ja_collector",
+    "ja_dev_channel",
+    "ja_figma",
+    "ja_hono",
+    "ja_launchd",
+    "ja_pnpm",
+    "ja_review_schedule",
+    "ja_spec",
+    "ja_store_edit",
+    "ja_store_kana",
+    "ja_vercel",
+    "ja_weekly_sync",
+    "none_mortgage"
+  ],
+  "test_ids": [
+    "en_launchd",
+    "en_settings",
+    "gen_plain",
+    "gen_sakki",
+    "ja_failing_tests",
+    "ja_invoice",
+    "ja_ponytail",
+    "ja_pr110_mobile",
+    "ja_pr93",
+    "ja_rate_limit",
+    "ja_settings_design",
+    "ja_slack_channel",
+    "none_discord"
+  ],
+  "reps": 1,
+  "metrics": [
+    {
+      "id": "hit1",
+      "label": "hit@1",
+      "kind": "binary"
+    },
+    {
+      "id": "recall3",
+      "label": "recall@3",
+      "kind": "float",
+      "scale": 1
+    },
+    {
+      "id": "kw_precision",
+      "label": "kw precision",
+      "kind": "float",
+      "scale": 1
+    }
+  ],
+  "goal": {
+    "target": "hit1",
+    "direction": "higher",
+    "hold": [
+      "kw_precision"
+    ]
+  },
+  "scope": [
+    "services/api/src/lib/continue-context.ts (extractKeywords, mergeContinueMemories)",
+    "the keyword loop in POST /v1/agent/continue (services/api/src/app.ts)"
+  ],
+  "off_limits": [
+    "services/api/eval/**",
+    "the response shape and mode: context_only",
+    "store.listMemories semantics used by /v1/timeline"
+  ],
+  "harness_paths": [
+    "services/api/eval/continue/run.ts",
+    "services/api/eval/continue/grade.ts",
+    "services/api/eval/continue/cases.ts",
+    "services/api/eval/summarize/cases.ts"
+  ],
+  "approve_each_round": false,
+  "current_round": 3,
+  "best": {
+    "round": 2,
+    "variant": "v2"
+  },
+  "rounds": [
+    {
+      "variant": "v1",
+      "change": "split Japanese keywords on hiragana",
+      "decision": "kept"
+    },
+    {
+      "variant": "v2",
+      "change": "rank keyword hits by matched-keyword count, then recency",
+      "decision": "kept"
+    },
+    {
+      "variant": "v3",
+      "change": "also emit katakana/kanji parts of mixed-script runs",
+      "decision": "reverted (train-only gain)"
+    }
+  ]
+}

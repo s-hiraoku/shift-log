@@ -11,7 +11,7 @@ import {
 import { requireAuth } from "./middleware/auth.js";
 import { rateLimit } from "./middleware/rate-limit.js";
 import { audit } from "./lib/audit.js";
-import { extractKeywords, mergeContinueMemories } from "./lib/continue-context.js";
+import { extractKeywords, mergeContinueMemories, rankKeywordHits } from "./lib/continue-context.js";
 import { sanitizeWindowUpload } from "./lib/sanitize.js";
 import { isRawWindowExpired, purgeAllTenants, storeFor, type MemoryStore } from "./lib/store.js";
 import {
@@ -235,15 +235,9 @@ export function createApp() {
     const store = tenant(c);
     const range = { since: body.since, until: body.until };
     const recent = store.listMemories({ limit: body.limit, ...range });
-    const keywordHits: typeof recent = [];
-    const seen = new Set<string>();
-    for (const q of extractKeywords(body.prompt)) {
-      for (const memory of store.listMemories({ q, limit: body.limit, ...range })) {
-        if (seen.has(memory.id)) continue;
-        seen.add(memory.id);
-        keywordHits.push(memory);
-      }
-    }
+    const keywordHits = rankKeywordHits(
+      extractKeywords(body.prompt).map((q) => store.listMemories({ q, limit: body.limit, ...range })),
+    );
     const memories = mergeContinueMemories({
       recent,
       keywordHits,
