@@ -1,3 +1,4 @@
+import { hostAndPath } from "@shift-log/schema";
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 
@@ -14,7 +15,14 @@ export type FrontWindow = {
   app: string;
   title: string;
   site?: string;
+  urlPath?: string;
+  /** Positively a private or incognito window. The tick must not be recorded. */
   privateBrowsing?: boolean;
+  /**
+   * Privacy mode could not be classified. urlPath must stay unset.
+   * Safari has no mode property, so a normal Safari window is also unknown.
+   */
+  privateBrowsingUnknown?: boolean;
   meta?: WindowTitleMeta;
 };
 
@@ -95,13 +103,9 @@ const defaultExec: ExecFileFn = async (file, args) => {
 };
 
 function hostnameFromUrl(raw: string): string | undefined {
-  try {
-    const url = new URL(raw.trim());
-    if (url.protocol !== "http:" && url.protocol !== "https:") return undefined;
-    return url.hostname.toLowerCase();
-  } catch {
-    return undefined;
-  }
+  const parsed = hostAndPath(raw);
+  if (parsed?.kind !== "absolute") return undefined;
+  return parsed.host;
 }
 
 /** Best-effort host from a browser window title (never treats the title as keystrokes). */
@@ -133,24 +137,82 @@ async function observeMac(exec: ExecFileFn): Promise<FrontWindow | null> {
   if (!app) return null;
   const title = rest.join("\t").trim();
   let site = siteFromTitle(title, app);
+  let urlPath: string | undefined;
+  let privateBrowsing = false;
+  let privateBrowsingUnknown = false;
   try {
     if (/^safari$/i.test(app)) {
-      const url = await exec("osascript", [
-        "-e",
-        'tell application "Safari" to return URL of front document',
-      ]);
-      site = hostnameFromUrl(url.stdout) ?? site;
+      const probe = await exec("osascript", ["-e", safariTabScript()]);
+      const read = readTabProbe(probe.stdout);
+      if (read.host) site = read.host;
+      privateBrowsing = read.privacy === "private";
+      privateBrowsingUnknown = read.privacy === "unknown";
+      if (read.privacy === "normal") urlPath = read.path;
     } else if (/google chrome|chromium|brave browser/i.test(app)) {
-      const url = await exec("osascript", [
-        "-e",
-        `tell application "${app}" to return URL of active tab of front window`,
-      ]);
-      site = hostnameFromUrl(url.stdout) ?? site;
+      const probe = await exec("osascript", ["-e", chromeTabScript(app)]);
+      const read = readTabProbe(probe.stdout);
+      if (read.host) site = read.host;
+      privateBrowsing = read.privacy === "private";
+      privateBrowsingUnknown = read.privacy === "unknown";
+      if (read.privacy === "normal") urlPath = read.path;
     }
   } catch {
-    // Automation permission denied — fall back to title heuristic.
+    // Automation permission denied, or the browser has no mode property.
+    if (/^safari$/i.test(app) || /google chrome|chromium|brave browser/i.test(app)) {
+      privateBrowsingUnknown = true;
+    }
   }
-  return withTitleMeta({ app, title, site });
+  return withTitleMeta({
+    app,
+    title,
+    site,
+    ...(urlPath ? { urlPath } : {}),
+    ...(privateBrowsing ? { privateBrowsing: true } : {}),
+    ...(privateBrowsingUnknown ? { privateBrowsingUnknown: true } : {}),
+  });
+}
+
+// Inside `tell application`, `tab` is the browser tab, not the tab character.
+function safariTabScript(): string {
+  return [
+    "set sep to ASCII character 9",
+    'tell application "Safari"',
+    '  set m to "unknown"',
+    "  try",
+    "    set m to mode of front window as string",
+    "  end try",
+    '  set u to ""',
+    "  try",
+    "    set u to URL of front document",
+    "  end try",
+    "  return m & sep & u",
+    "end tell",
+  ].join("\n");
+}
+
+function chromeTabScript(app: string): string {
+  return [
+    "set sep to ASCII character 9",
+    `tell application "${app}" to return (mode of front window as string) & sep & (URL of active tab of front window)`,
+  ].join("\n");
+}
+
+function readTabProbe(stdout: string): {
+  privacy: "private" | "normal" | "unknown";
+  host?: string;
+  path?: string;
+} {
+  const [modeRaw, ...rest] = stdout.replace(/\r/g, "").trim().split("\t");
+  const mode = (modeRaw ?? "").trim().toLowerCase();
+  const privacy =
+    mode === "incognito" || mode === "private"
+      ? "private"
+      : mode === "normal"
+        ? "normal"
+        : "unknown";
+  const parsed = hostAndPath(rest.join("\t"));
+  if (parsed?.kind !== "absolute") return { privacy };
+  return { privacy, host: parsed.host, path: parsed.path };
 }
 
 async function observeLinux(exec: ExecFileFn): Promise<FrontWindow | null> {

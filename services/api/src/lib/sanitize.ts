@@ -1,7 +1,6 @@
 import {
-  omitTitleFields,
+  omitRestrictedFields,
   PermissionsConfigSchema,
-  titlePolicyFor,
   type InteractionEvent,
   type PermissionsConfig,
   type WindowUpload,
@@ -20,7 +19,7 @@ export function sanitizeWindowUpload(
   const events = upload.events
     .filter((event) => !isPrivateBrowsing(event))
     .map(stripProhibitedMeta)
-    .map((event) => applyTitlePolicy(event, permissions));
+    .map((event) => omitRestrictedFields(event, permissions));
 
   return {
     metadata: {
@@ -46,12 +45,3 @@ function stripProhibitedMeta(event: InteractionEvent): InteractionEvent {
   };
 }
 
-function applyTitlePolicy(
-  event: InteractionEvent,
-  permissions: PermissionsConfig,
-): InteractionEvent {
-  if (event.app && titlePolicyFor(permissions, event.app) === "app_only") {
-    return omitTitleFields(event);
-  }
-  return event;
-}
