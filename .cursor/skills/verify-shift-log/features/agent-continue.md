@@ -6,7 +6,7 @@ Agents ask ShiftLog to resume prior work. v1 returns memories and `mode: "contex
 
 - `continue-context` POSTs `/v1/agent/continue` and receives `mode: "context_only"` plus `memories`.
 - `continue-echo` echoes the request `prompt`.
-- `continue-keyword` uses `prompt` tokens against title/body/apps/`entities` and tags `matched_by`.
+- `continue-keyword` uses `prompt` tokens against title, the row description, body, app names, and entity values, and tags `matched_by`.
 - `continue-range` accepts `since` / `until` (ISO 8601) and drops rows whose `window_start` is outside that inclusive range. The same pair is on `/v1/timeline` and `/v1/search`.
 - `recent-context` GETs `/v1/agent/recent` with the same `mode` and a read-only note.
 - `continue-empty` still returns `context_only` when the timeline is empty (`memories: []`).
@@ -36,6 +36,7 @@ curl -sS -X POST "$SHIFTLOG_API_ORIGIN/v1/agent/continue" \
 Exit 0. JSON has `mode` exactly `context_only`, `prompt` exactly `続きやって`, a `memories` array with the demo titles, every item `matched_by` `recent`, and a `note` that says context only / do not operate the computer. `続き` / `やって` are stopwords, so this prompt has no keywords and tags every row `recent`.
 
 - **Keyword.** POST the same URL with `{"prompt":"Safari","limit":12}`. At least one memory has `matched_by` `keyword` (the Safari demo row). Other demo rows stay `recent`.
+- **Description keyword.** POST the same URL with `{"prompt":"events across","limit":12}`. Every demo memory has `matched_by` `keyword`. That phrase is only in `front_matter.description` (`N events across M apps`), not in the title, body, or app names. This demo seed stores `entities: []`, so the hit is description-only; entity values are searched the same way when a memory has them.
 
 - **Range miss.** After seed, GET `$SHIFTLOG_API_ORIGIN/v1/timeline?since=2099-01-01T00:00:00.000Z&until=2099-01-01T01:00:00.000Z`. `items` is `[]`. POST continue with the same `since` / `until` also returns `memories: []`.
 
@@ -47,6 +48,7 @@ Exit 0. JSON has `mode` exactly `context_only`, `prompt` exactly `続きやっ�
 ## Gotchas
 
 - `mode` must be the string `context_only`. Do not infer “read-only” from a 200 status alone.
+- Keyword search uses the same haystack as `/v1/search` (title, description, body, apps, entity values). A prompt that appears only in the row description still tags `matched_by` `keyword`.
 - Continue never launches the desktop collector, never opens Chrome except the verification driver, and never POSTs `/v1/windows`. If those side effects appear, the proof failed.
 - `limit` defaults in schema; passing `"limit":12` matches the bundled skill. Do not send a Computer Use payload — the route does not accept one.
 - This feature has no UI entry. Do not report it verified by looking at the timeline page alone.
