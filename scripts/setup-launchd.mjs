@@ -1,19 +1,24 @@
-import { existsSync, mkdirSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, unlinkSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { spawnSync } from "node:child_process";
+// Importing load-root-env.mjs would run loadRootEnv() inside setup and bake this
+// process's .env into the collector origin. Read the file with the same parser instead.
+import { parseEnvFile } from "./env-file.mjs";
 
 const REPO_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 
 export const API_LABEL = "com.shiftlog.api";
 export const COLLECTOR_LABEL = "com.shiftlog.collector";
+export const MCP_LABEL = "com.shiftlog.mcp";
 
 export const TEMPLATE_CONTEXT = Object.freeze({
   nodePath: "{{NODE}}",
   repoRoot: "{{REPO}}",
   homeDir: "{{HOME}}",
   apiOrigin: "http://localhost:8787",
+  mcp: true,
 });
 
 export function macJoin(root, ...parts) {
@@ -25,7 +30,15 @@ export function distPaths(repoRoot) {
     envLoader: macJoin(repoRoot, "scripts/load-root-env.mjs"),
     api: macJoin(repoRoot, "services/api/dist/server.js"),
     collector: macJoin(repoRoot, "apps/desktop/dist/collector.js"),
+    mcp: macJoin(repoRoot, "services/mcp/dist/server.js"),
   };
+}
+
+export function mcpTokenConfigured(repoRoot) {
+  const file = resolve(repoRoot, ".env");
+  if (!existsSync(file)) return false;
+  const value = parseEnvFile(readFileSync(file, "utf8")).SHIFTLOG_MCP_TOKEN;
+  return typeof value === "string" && value.length > 0;
 }
 
 export function createLaunchdContext({
@@ -33,12 +46,15 @@ export function createLaunchdContext({
   repoRoot = REPO_ROOT,
   homeDir = homedir(),
   apiOrigin = process.env.SHIFTLOG_API_ORIGIN ?? "http://localhost:8787",
+  mcp,
 } = {}) {
+  const resolvedRoot = resolve(repoRoot);
   return {
     nodePath,
-    repoRoot: resolve(repoRoot),
+    repoRoot: resolvedRoot,
     homeDir,
     apiOrigin,
+    mcp: mcp ?? mcpTokenConfigured(resolvedRoot),
   };
 }
 
@@ -49,7 +65,7 @@ function nodeProgramArguments(ctx, entry) {
 export function buildAgents(ctx) {
   const dist = distPaths(ctx.repoRoot);
   const logs = macJoin(ctx.homeDir, "Library/Logs");
-  return [
+  const agents = [
     {
       label: API_LABEL,
       workingDirectory: ctx.repoRoot,
@@ -71,6 +87,19 @@ export function buildAgents(ctx) {
       standardErrorPath: macJoin(logs, "shiftlog-collector.log"),
     },
   ];
+  if (ctx.mcp) {
+    agents.push({
+      label: MCP_LABEL,
+      workingDirectory: ctx.repoRoot,
+      programArguments: nodeProgramArguments(ctx, dist.mcp),
+      environment: {
+        SHIFTLOG_API_ORIGIN: ctx.apiOrigin,
+      },
+      standardOutPath: macJoin(logs, "shiftlog-mcp.log"),
+      standardErrorPath: macJoin(logs, "shiftlog-mcp.log"),
+    });
+  }
+  return agents;
 }
 
 export function xmlEscape(value) {
@@ -138,14 +167,31 @@ export function writeLaunchAgents(agents, destDir) {
   });
 }
 
-export function assertDistArtifacts(repoRoot) {
-  const dist = distPaths(repoRoot);
-  const missing = [dist.api, dist.collector].filter((file) => !existsSync(file));
+export function assertDistArtifacts(agents) {
+  const missing = agents
+    .map((agent) => agent.programArguments.at(-1))
+    .filter((file) => !existsSync(file));
   if (missing.length > 0) {
     throw new Error(
       `missing built entrypoints:\n${missing.join("\n")}\nRun pnpm build first.`,
     );
   }
+}
+
+export function retireAgents(ctx, built, destDir, run, { bootout, uid } = {}) {
+  const builtLabels = new Set(built.map((agent) => agent.label));
+  const removed = [];
+  for (const agent of buildAgents({ ...ctx, mcp: true })) {
+    if (builtLabels.has(agent.label)) continue;
+    const file = resolve(destDir, plistFileName(agent.label));
+    if (!existsSync(file)) continue;
+    if (bootout && uid != null) {
+      run("launchctl", ["bootout", `gui/${uid}/${agent.label}`], { stdio: "ignore" });
+    }
+    unlinkSync(file);
+    removed.push(file);
+  }
+  return removed;
 }
 
 export function parseArgs(argv, defaults = {}) {
@@ -214,15 +260,19 @@ export function setupLaunchd({
   run = spawnSync,
 } = {}) {
   if (!skipBuild) runPnpmBuild(ctx.repoRoot, run);
-  assertDistArtifacts(ctx.repoRoot);
   const agents = buildAgents(ctx);
+  assertDistArtifacts(agents);
   mkdirSync(macJoin(ctx.homeDir, "Library/Logs"), { recursive: true });
   const paths = writeLaunchAgents(agents, destDir);
+  const retired = retireAgents(ctx, agents, destDir, run, {
+    bootout: !skipBootstrap,
+    uid: process.getuid?.(),
+  });
   if (writeTemplates) {
     writeLaunchAgents(buildAgents(TEMPLATE_CONTEXT), templatesDir);
   }
   if (!skipBootstrap) bootstrapAgents(paths, run);
-  return { agents, paths, bootstrapped: !skipBootstrap };
+  return { agents, paths, retired, bootstrapped: !skipBootstrap };
 }
 
 export async function main(argv = process.argv.slice(2), run = spawnSync) {
