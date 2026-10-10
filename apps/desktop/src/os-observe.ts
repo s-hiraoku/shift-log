@@ -1,5 +1,6 @@
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
+import { isBrowserApp, titleLooksPrivate } from "@shift-log/schema";
 
 const execFileAsync = promisify(execFile);
 
@@ -77,6 +78,9 @@ export function interpretWindowTitle(app: string, title: string): WindowTitleMet
 }
 
 function withTitleMeta(front: FrontWindow): FrontWindow {
+  if (front.privateBrowsing || (isBrowserApp(front.app) && titleLooksPrivate(front.title))) {
+    return { app: front.app, title: "", privateBrowsing: true };
+  }
   const meta = interpretWindowTitle(front.app, front.title);
   return meta ? { ...front, meta } : front;
 }
@@ -133,6 +137,7 @@ async function observeMac(exec: ExecFileFn): Promise<FrontWindow | null> {
   if (!app) return null;
   const title = rest.join("\t").trim();
   let site = siteFromTitle(title, app);
+  let privateBrowsing = false;
   try {
     if (/^safari$/i.test(app)) {
       const url = await exec("osascript", [
@@ -140,17 +145,26 @@ async function observeMac(exec: ExecFileFn): Promise<FrontWindow | null> {
         'tell application "Safari" to return URL of front document',
       ]);
       site = hostnameFromUrl(url.stdout) ?? site;
-    } else if (/google chrome|chromium|brave browser/i.test(app)) {
-      const url = await exec("osascript", [
+    } else if (/google chrome|chromium|brave browser|microsoft edge|vivaldi/i.test(app)) {
+      // Chromium exposes "incognito" as the window mode; check it before reading the URL.
+      const mode = await exec("osascript", [
         "-e",
-        `tell application "${app}" to return URL of active tab of front window`,
-      ]);
-      site = hostnameFromUrl(url.stdout) ?? site;
+        `tell application "${app}" to return mode of front window`,
+      ]).catch(() => ({ stdout: "", stderr: "" }));
+      if (/incognito/i.test(mode.stdout)) {
+        privateBrowsing = true;
+      } else {
+        const url = await exec("osascript", [
+          "-e",
+          `tell application "${app}" to return URL of active tab of front window`,
+        ]);
+        site = hostnameFromUrl(url.stdout) ?? site;
+      }
     }
   } catch {
     // Automation permission denied — fall back to title heuristic.
   }
-  return withTitleMeta({ app, title, site });
+  return withTitleMeta({ app, title, site, ...(privateBrowsing ? { privateBrowsing } : {}) });
 }
 
 async function observeLinux(exec: ExecFileFn): Promise<FrontWindow | null> {

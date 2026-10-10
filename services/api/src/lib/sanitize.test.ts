@@ -102,4 +102,45 @@ describe("sanitizeWindowUpload", () => {
     ]);
     expect(JSON.stringify(sanitized.events)).not.toContain("team_frontend-pr-n10n");
   });
+
+  it("redacts secrets, drops private windows, and hides password manager titles", () => {
+    const upload: WindowUpload = {
+      metadata: sampleMeta,
+      events: [
+        {
+          id: "term",
+          type: "front_window_summary",
+          ts: "2026-08-30T01:01:00.000Z",
+          device: "desk",
+          app: "ghostty",
+          summary: 'curl -H "Authorization: Bearer abc123def456ghi789" https://api.example.com/x?token=t1',
+          meta: { cwd: "~/src", branch: "main" },
+        },
+        {
+          id: "incognito",
+          type: "front_window_summary",
+          ts: "2026-08-30T01:02:00.000Z",
+          device: "desk",
+          app: "Google Chrome",
+          summary: "Bank - Google Chrome (Incognito)",
+        },
+        {
+          id: "vault",
+          type: "front_window_summary",
+          ts: "2026-08-30T01:03:00.000Z",
+          device: "desk",
+          app: "1Password",
+          summary: "AWS root — Personal",
+        },
+      ],
+    };
+    const sanitized = sanitizeWindowUpload(upload);
+    expect(sanitized.events.map((e) => e.id)).toEqual(["term", "vault"]);
+    expect(sanitized.metadata.event_count).toBe(2);
+    const text = JSON.stringify(sanitized.events);
+    expect(text).not.toContain("abc123def456ghi789");
+    expect(text).not.toContain("token=t1");
+    expect(text).not.toContain("AWS root");
+  });
 });
+

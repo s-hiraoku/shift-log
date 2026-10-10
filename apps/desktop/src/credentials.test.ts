@@ -29,19 +29,35 @@ function tempCredDir(): string {
 
 describe("credentials", () => {
   it("stores via macOS Keychain when security succeeds", async () => {
-    const calls: string[][] = [];
-    const exec: ExecFn = async (file, args) => {
-      calls.push([file, ...args]);
+    const calls: { argv: string[]; input?: string }[] = [];
+    const exec: ExecFn = async (file, args, input) => {
+      calls.push({ argv: [file, ...args], input });
       return { stdout: "stored-token\n", stderr: "" };
     };
     const where = await setApiToken("stored-token", { platform: "darwin", exec });
     expect(where).toBe("keychain");
-    expect(calls[0]?.[0]).toBe("security");
-    expect(calls[0]).toContain(CREDENTIAL_SERVICE);
-    expect(calls[0]).toContain(CREDENTIAL_ACCOUNT);
+    expect(calls[0]?.argv).toEqual(["security", "-i"]);
+    expect(calls[0]?.input).toContain(CREDENTIAL_SERVICE);
+    expect(calls[0]?.input).toContain(CREDENTIAL_ACCOUNT);
+    expect(calls[0]?.input).toContain('"stored-token"');
+    // The token never appears on a command line.
+    expect(calls.every((c) => !c.argv.includes("stored-token"))).toBe(true);
 
     const token = await getApiToken({ platform: "darwin", exec });
     expect(token).toBe("stored-token");
+  });
+
+  it("passes the token to secret-tool on stdin", async () => {
+    const calls: { argv: string[]; input?: string }[] = [];
+    const exec: ExecFn = async (file, args, input) => {
+      calls.push({ argv: [file, ...args], input });
+      return { stdout: "", stderr: "" };
+    };
+    const where = await setApiToken("linux-token", { platform: "linux", exec });
+    expect(where).toBe("keychain");
+    expect(calls[0]?.argv[0]).toBe("secret-tool");
+    expect(calls[0]?.input).toBe("linux-token");
+    expect(calls[0]?.argv.join(" ")).not.toContain("linux-token");
   });
 
   it("falls back to a 0600 file when the OS store is missing", async () => {
