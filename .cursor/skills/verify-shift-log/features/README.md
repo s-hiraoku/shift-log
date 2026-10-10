@@ -47,4 +47,4 @@ Keep implementation details out of the map. Name only user paths, stable handles
 - [Timeline, search, and memory detail](./timeline-and-search.md) covers empty state, title/body/app search, opening a memory, and the miss path.
 - [Settings collection and history delete](./settings-collection.md) covers the three collection checkboxes, save, and irreversible history delete.
 - [App and site allowlist](./allowlist.md) covers exclude/include modes and persisting the lists.
-- [Agent continue is context only](./agent-continue.md) covers `/v1/agent/continue` and `/v1/agent/recent` returning `mode: context_only` without acting.
+- [Agent continue is context only](./agent-continue.md) covers `/v1/agent/continue` and `/v1/agent/recent` returning `mode: context_only` without acting, and lists keyword matches ahead of newer non-matches.
