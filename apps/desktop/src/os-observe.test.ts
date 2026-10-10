@@ -116,4 +116,34 @@ describe("observeFrontWindow", () => {
     expect(front?.app).toBe("Safari");
     expect(front?.site).toBe("learn.chatgpt.com");
   });
+
+  it("marks a Chrome incognito window private and drops its title", async () => {
+    const calls: string[] = [];
+    const exec: ExecFileFn = async (file, args) => {
+      calls.push(args[1] ?? "");
+      if (args[1]?.includes("System Events")) {
+        return { stdout: "Google Chrome\tBank login - Google Chrome\n", stderr: "" };
+      }
+      if (args[1]?.includes("mode of front window")) {
+        return { stdout: "incognito\n", stderr: "" };
+      }
+      throw new Error(`unexpected ${file} ${args.join(" ")}`);
+    };
+    const front = await observeFrontWindow({ platform: "darwin", exec });
+    expect(front).toEqual({ app: "Google Chrome", title: "", privateBrowsing: true });
+    expect(calls.some((c) => c.includes("URL of active tab"))).toBe(false);
+  });
+
+  it("marks a Firefox private window from its title on Linux", async () => {
+    const exec: ExecFileFn = async (_file, args) => {
+      if (args[0] === "getactivewindow") return { stdout: "42\n", stderr: "" };
+      if (args[0] === "getwindowname") {
+        return { stdout: "Inbox — Mozilla Firefox Private Browsing\n", stderr: "" };
+      }
+      return { stdout: "firefox\n", stderr: "" };
+    };
+    const front = await observeFrontWindow({ platform: "linux", exec });
+    expect(front?.privateBrowsing).toBe(true);
+    expect(front?.title).toBe("");
+  });
 });

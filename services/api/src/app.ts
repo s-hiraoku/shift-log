@@ -76,7 +76,6 @@ export function createApp() {
     const presented =
       c.req.header("x-cron-secret") ??
       c.req.header("authorization")?.replace(/^Bearer\s+/i, "") ??
-      c.req.query("secret") ??
       "";
     if (!expected || presented !== expected) {
       return c.json({ error: "unauthorized" }, 401);
