@@ -57,9 +57,8 @@ function applyCapturePolicy(
   event: InteractionEvent,
   permissions: PermissionsConfig,
 ): InteractionEvent {
-  const restricted = omitRestrictedFields(event, permissions);
-  if (restricted.app && isSensitiveApp(restricted.app)) {
-    return omitTitleFields(restricted);
+  if (event.app && isSensitiveApp(event.app)) {
+    return omitTitleFields(event);
   }
-  return restricted;
+  return omitRestrictedFields(event, permissions);
 }
