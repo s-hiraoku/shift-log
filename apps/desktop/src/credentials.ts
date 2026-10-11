@@ -1,4 +1,4 @@
-import { execFile } from "node:child_process";
+import { execFile, spawn } from "node:child_process";
 import { chmodSync, mkdirSync, readFileSync, unlinkSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import path from "node:path";
@@ -9,18 +9,46 @@ const execFileAsync = promisify(execFile);
 export const CREDENTIAL_SERVICE = "shift-log";
 export const CREDENTIAL_ACCOUNT = "api-token";
 
+/** `input` is written to stdin so secrets never appear in the process list. */
 export type ExecFn = (
   file: string,
   args: string[],
+  input?: string,
 ) => Promise<{ stdout: string; stderr: string }>;
 
-const defaultExec: ExecFn = async (file, args) => {
+function execWithInput(
+  file: string,
+  args: string[],
+  input: string,
+): Promise<{ stdout: string; stderr: string }> {
+  return new Promise((resolve, reject) => {
+    const child = spawn(file, args, { timeout: 4000, windowsHide: true });
+    let stdout = "";
+    let stderr = "";
+    child.stdout.on("data", (d) => (stdout += String(d)));
+    child.stderr.on("data", (d) => (stderr += String(d)));
+    child.on("error", reject);
+    child.on("close", (code) => {
+      if (code === 0) resolve({ stdout, stderr });
+      else reject(new Error(`${file} exited with ${code}: ${stderr.trim()}`));
+    });
+    child.stdin.end(input);
+  });
+}
+
+const defaultExec: ExecFn = async (file, args, input) => {
+  if (input !== undefined) return execWithInput(file, args, input);
   const { stdout, stderr } = await execFileAsync(file, args, {
     timeout: 4000,
     windowsHide: true,
   });
   return { stdout: String(stdout), stderr: String(stderr) };
 };
+
+/** Quote one argument for `security -i`, which splits its stdin like a shell. */
+function securityQuote(value: string): string {
+  return `"${value.replace(/["\\]/g, (c) => `\\${c}`)}"`;
+}
 
 function fallbackPath(): string {
   const dir =
@@ -54,7 +82,8 @@ function clearFallback(): void {
 }
 
 async function setMac(token: string, exec: ExecFn): Promise<void> {
-  await exec("security", [
+  // `security -i` reads the command from stdin, so the token stays out of argv.
+  const command = [
     "add-generic-password",
     "-U",
     "-s",
@@ -62,8 +91,11 @@ async function setMac(token: string, exec: ExecFn): Promise<void> {
     "-a",
     CREDENTIAL_ACCOUNT,
     "-w",
-    token,
-  ]);
+    securityQuote(token),
+  ].join(" ");
+  await exec("security", ["-i"], `${command}\n`);
+  // `security -i` exits 0 even when the command inside fails; confirm the write.
+  if ((await getMac(exec)) !== token) throw new Error("keychain write not confirmed");
 }
 
 async function getMac(exec: ExecFn): Promise<string | null> {
@@ -94,11 +126,18 @@ async function clearMac(exec: ExecFn): Promise<void> {
 }
 
 async function setLinux(token: string, exec: ExecFn): Promise<void> {
-  const quoted = JSON.stringify(token);
-  await exec("bash", [
-    "-lc",
-    `printf %s ${quoted} | secret-tool store --label='ShiftLog API token' service ${CREDENTIAL_SERVICE} account ${CREDENTIAL_ACCOUNT}`,
-  ]);
+  await exec(
+    "secret-tool",
+    [
+      "store",
+      "--label=ShiftLog API token",
+      "service",
+      CREDENTIAL_SERVICE,
+      "account",
+      CREDENTIAL_ACCOUNT,
+    ],
+    token,
+  );
 }
 
 async function getLinux(exec: ExecFn): Promise<string | null> {

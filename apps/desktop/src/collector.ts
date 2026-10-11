@@ -1,8 +1,13 @@
 import {
   canCollect,
+  isBrowserApp,
+  isSensitiveApp,
   isSourceAllowed,
+  omitRestrictedFields,
   omitTitleFields,
-  titlePolicyFor,
+  redactEvent,
+  redactSensitiveText,
+  titleLooksPrivate,
   type InteractionEvent,
   type PermissionsConfig,
   type WindowUpload,
@@ -88,15 +93,24 @@ export class DesktopCollector {
     if (event.meta?.privateBrowsing === true) {
       return;
     }
-    if (event.app && titlePolicyFor(this.permissions, event.app) === "app_only") {
+    if (
+      event.app &&
+      isBrowserApp(event.app) &&
+      typeof event.summary === "string" &&
+      titleLooksPrivate(event.summary)
+    ) {
+      return;
+    }
+    event = omitRestrictedFields(event, this.permissions);
+    if (event.app && isSensitiveApp(event.app)) {
       event = omitTitleFields(event);
-    } else if (event.type === "typing_presence" && typeof event.meta?.keyText === "string") {
+    } else if ("meta" in event && event.meta && typeof event.meta.keyText === "string") {
       const { keyText: _removed, ...rest } = event.meta;
       event = { ...event, meta: rest };
     }
 
     this.buffer.push({
-      ...event,
+      ...redactEvent(event),
       device: "desk",
     });
   }
@@ -216,13 +230,19 @@ function titleMeta(observed: FrontWindow): FrontWindow["meta"] {
   return observed.meta ?? interpretWindowTitle(observed.app, observed.title);
 }
 
+function eventMeta(observed: FrontWindow): Record<string, unknown> | undefined {
+  const meta = titleMeta(observed);
+  if (!observed.privateBrowsingUnknown) return meta;
+  return { ...meta, privateBrowsingUnknown: true };
+}
+
 export function emitOsTick(
   collector: DesktopCollector,
   observed: FrontWindow,
   last: { app: string; title: string } | null,
 ): { app: string; title: string } {
   const now = new Date().toISOString();
-  const meta = titleMeta(observed);
+  const meta = eventMeta(observed);
   if (observed.privateBrowsing) return last ?? { app: observed.app, title: observed.title };
   if (!last || last.app !== observed.app) {
     collector.observe({
@@ -243,6 +263,7 @@ export function emitOsTick(
       app: observed.app,
       site: observed.site,
       summary: observed.title.slice(0, 200) || observed.site,
+      ...(observed.urlPath && !observed.privateBrowsingUnknown ? { urlPath: observed.urlPath } : {}),
       ...(meta ? { meta } : {}),
     });
   } else if (!last || last.title !== observed.title) {
@@ -346,7 +367,11 @@ export async function main(): Promise<void> {
     lastFront = emitOsTick(collector, observed, lastFront);
     control.lastApp = observed.app;
     control.lastObserveAt = new Date().toISOString();
-    console.log(`[desktop] observed app=${observed.app} title=${observed.title.slice(0, 80)}`);
+    console.log(
+      process.env.SHIFTLOG_DEBUG_TITLES === "1"
+        ? `[desktop] observed app=${observed.app} title=${redactSensitiveText(observed.title).slice(0, 80)}`
+        : `[desktop] observed app=${observed.app} title_chars=${observed.title.length}`,
+    );
   }
 
   if (process.env.SHIFTLOG_ONCE !== "1") {
