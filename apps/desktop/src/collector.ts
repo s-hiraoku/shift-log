@@ -1,7 +1,13 @@
 import {
   canCollect,
+  isBrowserApp,
+  isSensitiveApp,
   isSourceAllowed,
   omitRestrictedFields,
+  omitTitleFields,
+  redactEvent,
+  redactSensitiveText,
+  titleLooksPrivate,
   type InteractionEvent,
   type PermissionsConfig,
   type WindowUpload,
@@ -87,14 +93,24 @@ export class DesktopCollector {
     if (event.meta?.privateBrowsing === true) {
       return;
     }
+    if (
+      event.app &&
+      isBrowserApp(event.app) &&
+      typeof event.summary === "string" &&
+      titleLooksPrivate(event.summary)
+    ) {
+      return;
+    }
     event = omitRestrictedFields(event, this.permissions);
-    if (event.type === "typing_presence" && "meta" in event && typeof event.meta?.keyText === "string") {
+    if (event.app && isSensitiveApp(event.app)) {
+      event = omitTitleFields(event);
+    } else if ("meta" in event && event.meta && typeof event.meta.keyText === "string") {
       const { keyText: _removed, ...rest } = event.meta;
       event = { ...event, meta: rest };
     }
 
     this.buffer.push({
-      ...event,
+      ...redactEvent(event),
       device: "desk",
     });
   }
@@ -351,7 +367,11 @@ export async function main(): Promise<void> {
     lastFront = emitOsTick(collector, observed, lastFront);
     control.lastApp = observed.app;
     control.lastObserveAt = new Date().toISOString();
-    console.log(`[desktop] observed app=${observed.app} title=${observed.title.slice(0, 80)}`);
+    console.log(
+      process.env.SHIFTLOG_DEBUG_TITLES === "1"
+        ? `[desktop] observed app=${observed.app} title=${redactSensitiveText(observed.title).slice(0, 80)}`
+        : `[desktop] observed app=${observed.app} title_chars=${observed.title.length}`,
+    );
   }
 
   if (process.env.SHIFTLOG_ONCE !== "1") {

@@ -140,6 +140,47 @@ describe("DesktopCollector", () => {
     expect(JSON.stringify(window.events)).not.toContain("alice");
   });
 
+  it("redacts secrets and personal data from window titles", () => {
+    const collector = new DesktopCollector(
+      PermissionsConfigSchema.parse({ enabled: true, memories_enabled: true }),
+      "http://localhost:8787",
+      "dev-token",
+    );
+    emitOsTick(
+      collector,
+      {
+        app: "ghostty",
+        title: "~/src/app (main) — export OPENAI_API_KEY=sk-proj-abcdefghijklmnop1234",
+      },
+      null,
+    );
+    emitOsTick(collector, { app: "Mail", title: "Re: 見積 — taro@example.co.jp" }, null);
+    const text = JSON.stringify(collector.drainWindow(new Date()).events);
+    expect(text).not.toContain("sk-proj-");
+    expect(text).not.toContain("taro@example.co.jp");
+    expect(text).toContain("~/src/app (main)");
+  });
+
+  it("drops private browser windows and password manager titles", () => {
+    const collector = new DesktopCollector(
+      PermissionsConfigSchema.parse({ enabled: true, memories_enabled: true }),
+      "http://localhost:8787",
+      "dev-token",
+    );
+    emitOsTick(collector, { app: "Google Chrome", title: "", privateBrowsing: true }, null);
+    collector.observe({
+      id: "incog",
+      type: "front_window_summary",
+      ts: new Date().toISOString(),
+      app: "Microsoft Edge",
+      summary: "Bank - [InPrivate] - Microsoft Edge",
+    });
+    emitOsTick(collector, { app: "1Password", title: "GitHub — alice personal vault" }, null);
+    const events = collector.drainWindow(new Date()).events;
+    expect(events.every((e) => e.app === "1Password")).toBe(true);
+    expect(JSON.stringify(events)).not.toContain("vault");
+  });
+
   it("respects pause from menu bar", () => {
     const collector = new DesktopCollector(
       PermissionsConfigSchema.parse({

@@ -10,7 +10,10 @@
 | **観察と記憶のみ** | Computer Use は入れない。エージェントは承認なしで操作しない |
 | **スクショなし** | 画面録画・マイク・システム音声も取らない。全文キーログ禁止 |
 | **四十八時間破棄** | 生イベントは 48 時間で破棄。残すのは人が読める Markdown 記憶だけ |
-| **プライベートブラウズ** | 永久除外 |
+| **プライベートブラウズ** | 永久除外（Chrome 系はウィンドウのモード、Firefox / Edge などはタイトルで判定。Safari のプライベートウィンドウは判定できないので、Safari は `app_only` か除外を推奨） |
+| **秘密と個人情報のマスク** | ウィンドウタイトルの API キー・トークン・パスワード・メール・電話番号・URL クエリを、コレクタと API の両方で保存前に置き換える。パスワード管理アプリはアプリ名だけ残す（[詳細](docs/window-titles.md#タイトルから消えるもの)） |
+| **ログにタイトルを出さない** | コレクタのログは既定でタイトルの文字数だけ。`SHIFTLOG_DEBUG_TITLES=1` のときだけマスク済みタイトルを出す |
+| **LLM は任意** | `SHIFTLOG_LLM_API_KEY` を設定したときだけ、マスク済みのタイトルとホスト名を外部 LLM に送る |
 | **「続きやって」** | コンテキスト返却のみ。実行しない |
 
 ## モノレポ構成
@@ -164,6 +167,8 @@ Vercel + Postgres（Neon など）では、ウィンドウタイトルに含ま�
 ```bash
 pnpm test
 ```
+
+Claude Code のクラウドセッションでは `.claude/hooks/session-start.sh` が依存導入・schema ビルド・`.env` 作成を済ませます。UI まで通す検証は `verify-shift-log` スキル（[`.claude/skills/verify-shift-log/SKILL.md`](.claude/skills/verify-shift-log/SKILL.md)）を使います。十分サマリ（LLM 要約）の質は `eval-shift-log` スキル（[`.claude/skills/eval-shift-log/SKILL.md`](.claude/skills/eval-shift-log/SKILL.md)）の eval で測り、プロンプト変更は train/test 分割でヒルクライムします。
 
 ## レビュー
 

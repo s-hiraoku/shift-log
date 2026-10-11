@@ -154,9 +154,7 @@ describe("observeFrontWindow", () => {
       throw new Error(`unexpected ${file} ${args.join(" ")}`);
     };
     const front = await observeFrontWindow({ platform: "darwin", exec });
-    expect(front?.privateBrowsing).toBe(true);
-    expect(front?.urlPath).toBeUndefined();
-    expect(front?.site).toBe("github.com");
+    expect(front).toEqual({ app: "Google Chrome", title: "", privateBrowsing: true });
   });
 
   it("builds the mode and URL separator outside the tell", async () => {
@@ -200,5 +198,39 @@ describe("observeFrontWindow", () => {
     expect(front?.privateBrowsing).toBeUndefined();
     expect(front?.privateBrowsingUnknown).toBe(true);
     expect(front?.site).toBe("github.com");
+  });
+
+  it("marks a Chrome incognito window private and drops its title", async () => {
+    const calls: string[] = [];
+    const exec: ExecFileFn = async (file, args) => {
+      calls.push(args[1] ?? "");
+      if (args[1]?.includes("System Events")) {
+        return { stdout: "Google Chrome\tBank login - Google Chrome\n", stderr: "" };
+      }
+      if (args[1]?.includes("mode of front window")) {
+        return { stdout: "incognito\n", stderr: "" };
+      }
+      throw new Error(`unexpected ${file} ${args.join(" ")}`);
+    };
+    const front = await observeFrontWindow({ platform: "darwin", exec });
+    expect(front).toEqual({ app: "Google Chrome", title: "", privateBrowsing: true });
+    const probe = calls.find((script) => script.includes("mode of front window"));
+    expect(probe).toBeDefined();
+    const tellAt = probe!.indexOf("tell application");
+    expect(probe!.slice(0, tellAt)).toContain("ASCII character 9");
+    expect(probe!.slice(tellAt)).not.toMatch(/&\s*tab\s*&/);
+  });
+
+  it("marks a Firefox private window from its title on Linux", async () => {
+    const exec: ExecFileFn = async (_file, args) => {
+      if (args[0] === "getactivewindow") return { stdout: "42\n", stderr: "" };
+      if (args[0] === "getwindowname") {
+        return { stdout: "Inbox — Mozilla Firefox Private Browsing\n", stderr: "" };
+      }
+      return { stdout: "firefox\n", stderr: "" };
+    };
+    const front = await observeFrontWindow({ platform: "linux", exec });
+    expect(front?.privateBrowsing).toBe(true);
+    expect(front?.title).toBe("");
   });
 });

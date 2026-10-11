@@ -1,4 +1,4 @@
-import { hostAndPath } from "@shift-log/schema";
+import { hostAndPath, isBrowserApp, titleLooksPrivate } from "@shift-log/schema";
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 
@@ -85,6 +85,9 @@ export function interpretWindowTitle(app: string, title: string): WindowTitleMet
 }
 
 function withTitleMeta(front: FrontWindow): FrontWindow {
+  if (front.privateBrowsing || (isBrowserApp(front.app) && titleLooksPrivate(front.title))) {
+    return { app: front.app, title: "", privateBrowsing: true };
+  }
   const meta = interpretWindowTitle(front.app, front.title);
   return meta ? { ...front, meta } : front;
 }
@@ -140,6 +143,7 @@ async function observeMac(exec: ExecFileFn): Promise<FrontWindow | null> {
   let urlPath: string | undefined;
   let privateBrowsing = false;
   let privateBrowsingUnknown = false;
+  const chromium = /google chrome|chromium|brave browser|microsoft edge|vivaldi/i;
   try {
     if (/^safari$/i.test(app)) {
       const probe = await exec("osascript", ["-e", safariTabScript()]);
@@ -148,7 +152,7 @@ async function observeMac(exec: ExecFileFn): Promise<FrontWindow | null> {
       privateBrowsing = read.privacy === "private";
       privateBrowsingUnknown = read.privacy === "unknown";
       if (read.privacy === "normal") urlPath = read.path;
-    } else if (/google chrome|chromium|brave browser/i.test(app)) {
+    } else if (chromium.test(app)) {
       const probe = await exec("osascript", ["-e", chromeTabScript(app)]);
       const read = readTabProbe(probe.stdout);
       if (read.host) site = read.host;
@@ -158,7 +162,7 @@ async function observeMac(exec: ExecFileFn): Promise<FrontWindow | null> {
     }
   } catch {
     // Automation permission denied, or the browser has no mode property.
-    if (/^safari$/i.test(app) || /google chrome|chromium|brave browser/i.test(app)) {
+    if (/^safari$/i.test(app) || chromium.test(app)) {
       privateBrowsingUnknown = true;
     }
   }

@@ -1,6 +1,10 @@
 import {
   canCollect,
+  isBrowserApp,
+  isSensitiveApp,
   isSourceAllowed,
+  redactEvent,
+  titleLooksPrivate,
   omitTitleFields,
   titlePolicyFor,
   type InteractionEvent,
@@ -47,7 +51,18 @@ export class MobileCollector {
       return;
     }
     if (event.meta?.privateBrowsing === true) return;
-    if (event.app && titlePolicyFor(this.permissions, event.app) === "app_only") {
+    if (
+      event.app &&
+      isBrowserApp(event.app) &&
+      typeof event.summary === "string" &&
+      titleLooksPrivate(event.summary)
+    ) {
+      return;
+    }
+    if (
+      event.app &&
+      (isSensitiveApp(event.app) || titlePolicyFor(this.permissions, event.app) === "app_only")
+    ) {
       event = omitTitleFields(event);
     }
 
@@ -66,7 +81,7 @@ export class MobileCollector {
       return;
     }
 
-    this.buffer.push({ ...event, device: "mobile" });
+    this.buffer.push({ ...redactEvent(event), device: "mobile" });
   }
 
   drainWindow(windowStart: Date): WindowUpload {

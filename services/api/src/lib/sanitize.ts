@@ -1,5 +1,10 @@
 import {
+  isBrowserApp,
+  isSensitiveApp,
   omitRestrictedFields,
+  omitTitleFields,
+  redactEvent,
+  titleLooksPrivate,
   PermissionsConfigSchema,
   type InteractionEvent,
   type PermissionsConfig,
@@ -19,7 +24,8 @@ export function sanitizeWindowUpload(
   const events = upload.events
     .filter((event) => !isPrivateBrowsing(event))
     .map(stripProhibitedMeta)
-    .map((event) => omitRestrictedFields(event, permissions));
+    .map((event) => applyCapturePolicy(event, permissions))
+    .map(redactEvent);
 
   return {
     metadata: {
@@ -31,7 +37,9 @@ export function sanitizeWindowUpload(
 }
 
 function isPrivateBrowsing(event: InteractionEvent): boolean {
-  return event.meta?.privateBrowsing === true;
+  if (event.meta?.privateBrowsing === true) return true;
+  const fromBrowser = event.site !== undefined || (event.app !== undefined && isBrowserApp(event.app));
+  return fromBrowser && typeof event.summary === "string" && titleLooksPrivate(event.summary);
 }
 
 function stripProhibitedMeta(event: InteractionEvent): InteractionEvent {
@@ -45,3 +53,13 @@ function stripProhibitedMeta(event: InteractionEvent): InteractionEvent {
   };
 }
 
+function applyCapturePolicy(
+  event: InteractionEvent,
+  permissions: PermissionsConfig,
+): InteractionEvent {
+  const restricted = omitRestrictedFields(event, permissions);
+  if (restricted.app && isSensitiveApp(restricted.app)) {
+    return omitTitleFields(restricted);
+  }
+  return restricted;
+}
