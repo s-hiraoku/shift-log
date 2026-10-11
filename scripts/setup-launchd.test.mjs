@@ -7,6 +7,7 @@ import { spawnSync } from "node:child_process";
 import {
   API_LABEL,
   COLLECTOR_LABEL,
+  MCP_LABEL,
   TEMPLATE_CONTEXT,
   assertDistArtifacts,
   bootstrapAgents,
@@ -42,6 +43,7 @@ function assertCleanPlist(xml, entry) {
   assert.match(xml, new RegExp(`<string>${entry.replaceAll("/", "\\/")}<\\/string>`));
   assert.match(xml, /<string>--import<\/string>/);
   assert.equal(xml.includes("SHIFTLOG_API_TOKEN"), false);
+  assert.equal(xml.includes("SHIFTLOG_MCP_TOKEN"), false);
 }
 
 describe("buildAgents", () => {
@@ -217,10 +219,62 @@ describe("setupLaunchd", () => {
 
   it("fails closed when dist is missing", () => {
     const repoRoot = mkdtempSync(join(tmpdir(), "shiftlog-launchd-empty-"));
-    assert.throws(
-      () => assertDistArtifacts(repoRoot),
-      /missing built entrypoints/,
+    const agents = buildAgents({
+      nodePath: "/opt/node/bin/node",
+      repoRoot,
+      homeDir: "/tmp",
+      apiOrigin: "http://localhost:8787",
+      mcp: false,
+    });
+    assert.throws(() => assertDistArtifacts(agents), /missing built entrypoints/);
+  });
+
+  it("registers com.shiftlog.mcp only while .env sets SHIFTLOG_MCP_TOKEN", () => {
+    const repoRoot = fakeRepo();
+    mkdirSync(join(repoRoot, "services/mcp/dist"), { recursive: true });
+    writeFileSync(distPaths(repoRoot).mcp, "console.log('mcp')\n");
+    writeFileSync(join(repoRoot, ".env"), "SHIFTLOG_MCP_TOKEN=example-mcp-token-0123456789abcdef\n");
+    const homeDir = mkdtempSync(join(tmpdir(), "shiftlog-launchd-mcp-"));
+    const destDir = join(homeDir, "Library/LaunchAgents");
+    const ctx = createLaunchdContext({
+      nodePath: "/opt/node/bin/node",
+      repoRoot,
+      homeDir,
+      apiOrigin: "http://localhost:8787",
+    });
+    assert.equal(ctx.mcp, true);
+    const first = setupLaunchd({
+      ctx,
+      destDir,
+      skipBuild: true,
+      skipBootstrap: true,
+    });
+    assert.deepEqual(
+      first.agents.map((agent) => agent.label),
+      [API_LABEL, COLLECTOR_LABEL, MCP_LABEL],
     );
+    const xml = readFileSync(join(destDir, "com.shiftlog.mcp.plist"), "utf8");
+    assertCleanPlist(xml, macJoin(repoRoot, "services/mcp/dist/server.js"));
+    assert.match(xml, /<key>SHIFTLOG_API_ORIGIN<\/key>/);
+    assert.equal(xml.includes("example-mcp-token-0123456789abcdef"), false);
+
+    writeFileSync(join(repoRoot, ".env"), "SHIFTLOG_API_TOKEN=example-api-token\n");
+    const off = createLaunchdContext({
+      nodePath: "/opt/node/bin/node",
+      repoRoot,
+      homeDir,
+      apiOrigin: "http://localhost:8787",
+    });
+    assert.equal(off.mcp, false);
+    setupLaunchd({
+      ctx: off,
+      destDir,
+      skipBuild: true,
+      skipBootstrap: true,
+    });
+    assert.equal(existsSync(join(destDir, "com.shiftlog.mcp.plist")), false);
+    assert.equal(existsSync(join(destDir, "com.shiftlog.api.plist")), true);
+    assert.equal(existsSync(join(destDir, "com.shiftlog.collector.plist")), true);
   });
 
   it("bootout then bootstrap each agent", () => {
