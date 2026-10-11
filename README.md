@@ -138,6 +138,44 @@ pnpm --filter @shift-log/desktop collect
 
 macOS は初回にアクセシビリティ許可、Linux は `xdotool`（なければ `xprop`）が必要です。
 
+## 読み取り専用 MCP
+
+外部エージェントが記憶を読むための Streamable HTTP サーバです。書き込み、収集のオンオフ、OS 操作はありません。待受は `127.0.0.1:8790` です。API の既定はこれまでどおり `127.0.0.1:8787` です。
+
+受信の Bearer は `SHIFTLOG_MCP_TOKEN` です。API を呼ぶときは、別の値である `SHIFTLOG_API_TOKEN` を使います。MCP トークンは 32 文字以上にしてください。`dev-token` では起動しません。
+
+```bash
+# .env に次の2行を書く。値は API トークンと違うものにする。
+# SHIFTLOG_MCP_TOKEN=$(openssl rand -hex 32)
+# SHIFTLOG_API_TOKEN は既存のまま。
+
+pnpm --filter @shift-log/schema build
+pnpm --filter @shift-log/mcp build
+pnpm --filter @shift-log/mcp start
+# ShiftLog MCP listening on http://127.0.0.1:8790/mcp
+```
+
+ポートは `--port` または `SHIFTLOG_MCP_PORT` で変えられます。開発中にファイルを見ながら動かすときは `pnpm dev:mcp` です。
+
+`pnpm setup:launchd` は、`.env` に `SHIFTLOG_MCP_TOKEN` があるときだけ `com.shiftlog.mcp` を登録します。ログは `~/Library/Logs/shiftlog-mcp.log` です。トークンの行を消して同じコマンドを再実行すると、その LaunchAgent は外れます。API とコレクタの登録は今までどおりです。plist にはトークンを書きません。
+
+Tailscale Funnel で外から届くようにする手順です。このリポジトリの変更では Funnel を有効にしません。実行するかは運用者の判断です。
+
+```bash
+tailscale funnel --bg 8790
+tailscale funnel status
+# 止めるときは tailscale funnel --help の off / reset に従う
+```
+
+注意:
+
+- Funnel はインターネットに公開します。門は Bearer だけです。トークンは 32 バイトの乱数にして、コマンドラインではなくクライアント設定に置いてください。
+- 公開するのは `8790` だけです。API の `8787` とコレクタメニューの `8791` は Funnel に載せないでください。API には書き込みと削除があります。
+- クライアントが tailnet に入れるなら、`tailscale serve` のほうが公開範囲は狭いです。
+- `*.ts.net` の名前は Certificate Transparency のログに残ります。URL は知られているものとして扱ってください。
+- 記憶にはウィンドウタイトル、リポジトリ名、Slack チャンネル名が入ります。トークンを持つ人はそれらを読めます。
+- トークンを回すときは `.env` を書き換えて `launchctl kickstart -k gui/$(id -u)/com.shiftlog.mcp` します。API とコレクタのトークンは別なので、そちらは動き続けます。
+
 Web UI は `/api/*` の Route Handler 経由で API を呼び、Bearer トークンはサーバー側で付与します。
 
 ## API（認証: Bearer）
