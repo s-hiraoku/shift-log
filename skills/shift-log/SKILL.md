@@ -65,11 +65,11 @@ curl -sS "$SHIFTLOG_API_ORIGIN/v1/agent/recent?limit=12" \
 | --- | --- |
 | `mode` | Always `context_only` in v1 |
 | `memories` | Markdown memory records (front_matter + body) plus `matched_by` |
-| `matched_by` | `keyword` if a prompt token hit title/body/apps/`entities`; otherwise `recent` |
+| `matched_by` | `keyword` if a prompt token hit title, description, body, apps, or `entities[].value`; otherwise `recent`. Entity `kind` is not matched |
 | `note` | Reminder: read-only; no Computer Use |
 | `prompt` | Echo of continue prompt (continue endpoint only) |
 
-Continue extracts keywords from `prompt`, searches title, body, apps, and `entities[].value` for each, and merges those hits with the newest `limit` rows. Keyword hits come first so an older entity still appears. `続きやって` has no keywords and returns recent only.
+Continue extracts keywords from `prompt`, searches title, description, body, apps, and `entities[].value` for each, and merges those hits with the newest `limit` rows. Keyword hits come first so an older entity still appears. `続きやって` has no keywords and returns recent only. Entity `kind` is not searched.
 
 `since` / `until` are optional ISO 8601 datetimes. They filter on `front_matter.window_start` (inclusive) on continue, `/v1/timeline`, and `/v1/search`.
 
@@ -77,7 +77,7 @@ Each memory `front_matter` typically has: `title`, `description`, `apps`, `devic
 
 ### Reading `entities`
 
-`front_matter.entities` is `{ kind, value }[]`. Kinds are `github_repo`, `github_pr`, `slack_channel`, `url`, `file`. Use `value` as the resume target (repo `DietrichGebert/ponytail`, PR `owner/repo#12`, Slack channel name). Search and continue keywords match the `value` string, so `prompt: "ponytail"` finds that repo even when it is not in the recent window.
+`front_matter.entities` is `{ kind, value }[]`. Kinds are `github_repo`, `github_pr`, `slack_channel`, `url`, `file`. Use `value` as the resume target (repo `DietrichGebert/ponytail`, PR `owner/repo#12`, Slack channel name). Search and continue keywords match the `value` string, so `prompt: "ponytail"` finds that repo even when it is not in the recent window. They do not match `kind`. The same fields apply to `GET /v1/search` and to timeline `q`.
 
 ## Search / timeline
 
@@ -112,6 +112,41 @@ curl -sS -X POST "$SHIFTLOG_API_ORIGIN/v1/demo/seed" \
   -H "Content-Type: application/json" \
   -d '{"enable":true}'
 ```
+
+## Remote MCP
+
+A read-only Streamable HTTP server listens on `http://127.0.0.1:8790/mcp` (`SHIFTLOG_MCP_PORT` or `--port`). The ShiftLog API stays on its own default, `http://127.0.0.1:8787`.
+
+Every MCP request needs `Authorization: Bearer $SHIFTLOG_MCP_TOKEN`. That value is not `SHIFTLOG_API_TOKEN`. The MCP process uses `SHIFTLOG_API_TOKEN` only when it calls the API. A missing or wrong MCP bearer is HTTP 401 `{ "error": "unauthorized" }`. Do not send `dev-token`.
+
+`mode` is a response field on `recent_memories` and `continue_context`. It is always `context_only`. Do not send `mode`. Timeline, search, and get-by-id have no mode.
+
+| Tool | Upstream |
+| --- | --- |
+| `recent_memories` | `GET /v1/agent/recent` |
+| `continue_context` | `POST /v1/agent/continue` |
+| `timeline` | `GET /v1/timeline` (`q` optional) |
+| `search_memories` | `GET /v1/search` (`q` required) |
+| `get_memory` | `GET /v1/memories/:id` |
+
+Search text matches `title`, `description`, `body`, `apps`, and `entities[].value`. It does not match entity `kind`.
+
+```json
+{
+  "url": "http://127.0.0.1:8790/mcp",
+  "headers": { "Authorization": "Bearer <SHIFTLOG_MCP_TOKEN>" }
+}
+```
+
+```json
+{ "name": "search_memories", "arguments": { "q": "ponytail" } }
+```
+
+```json
+{ "name": "continue_context", "arguments": { "prompt": "ponytail の続き" } }
+```
+
+There are no write tools, collection toggles, or OS tools.
 
 ## Agent checklist
 

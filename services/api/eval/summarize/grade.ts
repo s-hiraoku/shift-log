@@ -84,6 +84,7 @@ function haystack(upload: WindowUpload, c: EvalCase): string {
   const parts: string[] = [];
   for (const e of upload.events) {
     parts.push(e.app ?? "", e.summary ?? "", e.site ?? "", e.urlPath ?? "");
+    if (e.site && e.urlPath?.startsWith("/")) parts.push(`https://${e.site}${e.urlPath}`);
     if (e.meta) parts.push(JSON.stringify(e.meta));
   }
   if (c.previous) parts.push(c.previous.title, c.previous.body);
