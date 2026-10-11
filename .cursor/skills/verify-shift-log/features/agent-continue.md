@@ -33,7 +33,7 @@ curl -sS -X POST "$SHIFTLOG_API_ORIGIN/v1/agent/continue" \
   -d '{"prompt":"続きやって","limit":12}'
 ```
 
-Exit 0. JSON has `mode` exactly `context_only`, `prompt` exactly `続きやって`, a `memories` array with the demo titles, every item `matched_by` `recent`, and a `note` that says context only / do not operate the computer. `続き` and `やって` are stopwords only as whole tokens. This prompt is the single token `続きやって`, which is not itself a stopword and does not appear in the demo rows, so every row stays `recent`.
+Exit 0. JSON has `mode` exactly `context_only`, `prompt` exactly `続きやって`, a `memories` array with the demo titles, every item `matched_by` `recent`, and a `note` that says context only / do not operate the computer. `続き` / `やって` are stopwords, so this prompt has no keywords and tags every row `recent`.
 
 - **Keyword.** POST the same URL with `{"prompt":"Safari","limit":12}`. At least one memory has `matched_by` `keyword` (the Safari demo row). Other demo rows stay `recent`.
 - **Description keyword.** POST the same URL with `{"prompt":"events across","limit":12}`. Every demo memory has `matched_by` `keyword`. That phrase is only in `front_matter.description` (`N events across M apps`), not in the title, body, or app names. This demo seed stores `entities: []`, so the hit is description-only; entity values are searched the same way when a memory has them.
@@ -49,7 +49,6 @@ Exit 0. JSON has `mode` exactly `context_only`, `prompt` exactly `続きやっ�
 
 - `mode` must be the string `context_only`. Do not infer “read-only” from a 200 status alone.
 - Keyword search uses the same haystack as `/v1/search` (title, description, body, apps, entity values). A prompt that appears only in the row description still tags `matched_by` `keyword`.
-- `続きやって` matching all `recent` does not mean keyword extraction returned nothing. The stopword list contains `続き` and `やって` separately; the prompt stays one token.
 - Continue never launches the desktop collector, never opens Chrome except the verification driver, and never POSTs `/v1/windows`. If those side effects appear, the proof failed.
 - `limit` defaults in schema; passing `"limit":12` matches the bundled skill. Do not send a Computer Use payload — the route does not accept one.
 - This feature has no UI entry. Do not report it verified by looking at the timeline page alone.

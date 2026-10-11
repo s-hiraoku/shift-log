@@ -32,7 +32,9 @@ pnpm --filter @shift-log/desktop collect
 
 | 変数 | 必須 | 説明 |
 | --- | --- | --- |
-| `SHIFTLOG_API_TOKEN` | はい | Bearer。未設定なら API は起動しない |
+| `SHIFTLOG_API_TOKEN` | はい | Bearer。未設定なら API は起動しない。読み取り専用 MCP が API を呼ぶときにも使う |
+| `SHIFTLOG_MCP_TOKEN` | MCP を使うとき | MCP の受信 Bearer。API トークンとは別の値で 32 文字以上。`.env` にあるときだけ `com.shiftlog.mcp` を登録する |
+| `SHIFTLOG_MCP_PORT` | 任意 | MCP の待受。既定 `8790`。`8787` は API の既定なので使わない |
 | `SHIFTLOG_API_TOKENS` | 任意 | `user:token,...` でテナント分離 |
 | `SHIFTLOG_ALLOW_INSECURE_DEV` | 開発のみ | `1` のとき暗黙 `dev-token` |
 | `SHIFTLOG_DATA_DIR` | 自前ホスト | SQLite。未設定時は `~/.local/share/shiftlog`。相対パスはリポジトリルート基準 |
@@ -97,7 +99,7 @@ pnpm --filter @shift-log/desktop credentials set "$SHIFTLOG_API_TOKEN"
 pnpm setup:launchd
 ```
 
-`pnpm setup:launchd` は `pnpm build` のあと、このマシンの `node` フルパスとリポジトリパスで plist を生成し、`~/Library/LaunchAgents` へ書いて `launchctl bootstrap` します。再実行しても同じ状態に収束します。
+`pnpm setup:launchd` は `pnpm build` のあと、このマシンの `node` フルパスとリポジトリパスで plist を生成し、`~/Library/LaunchAgents` へ書いて `launchctl bootstrap` します。再実行しても同じ状態に収束します。`.env` に `SHIFTLOG_MCP_TOKEN` があるときだけ `com.shiftlog.mcp` も登録します。その行を消して再実行すると、MCP の plist は外れます。MCP は `127.0.0.1:8790` で待ちます。API の既定ポートは `8787` のままです。
 
 コレクタのトークンはキーチェーン（または `~/.config/shiftlog/credentials.json`）から読むので、コレクタ側 plist には書きません。API のトークンはリポジトリ直下の `.env` を `scripts/load-root-env.mjs` 経由で読みます。plist に `SHIFTLOG_API_TOKEN` は入りません。
 

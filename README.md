@@ -10,7 +10,10 @@
 | **観察と記憶のみ** | Computer Use は入れない。エージェントは承認なしで操作しない |
 | **スクショなし** | 画面録画・マイク・システム音声も取らない。全文キーログ禁止 |
 | **四十八時間破棄** | 生イベントは 48 時間で破棄。残すのは人が読める Markdown 記憶だけ |
-| **プライベートブラウズ** | 永久除外 |
+| **プライベートブラウズ** | 永久除外（Chrome 系はウィンドウのモード、Firefox / Edge などはタイトルで判定。Safari のプライベートウィンドウは判定できないので、Safari は `app_only` か除外を推奨） |
+| **秘密と個人情報のマスク** | ウィンドウタイトルの API キー・トークン・パスワード・メール・電話番号・URL クエリを、コレクタと API の両方で保存前に置き換える。パスワード管理アプリはアプリ名だけ残す（[詳細](docs/window-titles.md#タイトルから消えるもの)） |
+| **ログにタイトルを出さない** | コレクタのログは既定でタイトルの文字数だけ。`SHIFTLOG_DEBUG_TITLES=1` のときだけマスク済みタイトルを出す |
+| **LLM は任意** | `SHIFTLOG_LLM_API_KEY` を設定したときだけ、マスク済みのタイトルとホスト名を外部 LLM に送る |
 | **「続きやって」** | コンテキスト返却のみ。実行しない |
 
 ## モノレポ構成
@@ -135,6 +138,44 @@ pnpm --filter @shift-log/desktop collect
 
 macOS は初回にアクセシビリティ許可、Linux は `xdotool`（なければ `xprop`）が必要です。
 
+## 読み取り専用 MCP
+
+外部エージェントが記憶を読むための Streamable HTTP サーバです。書き込み、収集のオンオフ、OS 操作はありません。待受は `127.0.0.1:8790` です。API の既定はこれまでどおり `127.0.0.1:8787` です。
+
+受信の Bearer は `SHIFTLOG_MCP_TOKEN` です。API を呼ぶときは、別の値である `SHIFTLOG_API_TOKEN` を使います。MCP トークンは 32 文字以上にしてください。`dev-token` では起動しません。
+
+```bash
+# .env に次の2行を書く。値は API トークンと違うものにする。
+# SHIFTLOG_MCP_TOKEN=$(openssl rand -hex 32)
+# SHIFTLOG_API_TOKEN は既存のまま。
+
+pnpm --filter @shift-log/schema build
+pnpm --filter @shift-log/mcp build
+pnpm --filter @shift-log/mcp start
+# ShiftLog MCP listening on http://127.0.0.1:8790/mcp
+```
+
+ポートは `--port` または `SHIFTLOG_MCP_PORT` で変えられます。開発中にファイルを見ながら動かすときは `pnpm dev:mcp` です。
+
+`pnpm setup:launchd` は、`.env` に `SHIFTLOG_MCP_TOKEN` があるときだけ `com.shiftlog.mcp` を登録します。ログは `~/Library/Logs/shiftlog-mcp.log` です。トークンの行を消して同じコマンドを再実行すると、その LaunchAgent は外れます。API とコレクタの登録は今までどおりです。plist にはトークンを書きません。
+
+Tailscale Funnel で外から届くようにする手順です。このリポジトリの変更では Funnel を有効にしません。実行するかは運用者の判断です。
+
+```bash
+tailscale funnel --bg 8790
+tailscale funnel status
+# 止めるときは tailscale funnel --help の off / reset に従う
+```
+
+注意:
+
+- Funnel はインターネットに公開します。門は Bearer だけです。トークンは 32 バイトの乱数にして、コマンドラインではなくクライアント設定に置いてください。
+- 公開するのは `8790` だけです。API の `8787` とコレクタメニューの `8791` は Funnel に載せないでください。API には書き込みと削除があります。
+- クライアントが tailnet に入れるなら、`tailscale serve` のほうが公開範囲は狭いです。
+- `*.ts.net` の名前は Certificate Transparency のログに残ります。URL は知られているものとして扱ってください。
+- 記憶にはウィンドウタイトル、リポジトリ名、Slack チャンネル名が入ります。トークンを持つ人はそれらを読めます。
+- トークンを回すときは `.env` を書き換えて `launchctl kickstart -k gui/$(id -u)/com.shiftlog.mcp` します。API とコレクタのトークンは別なので、そちらは動き続けます。
+
 Web UI は `/api/*` の Route Handler 経由で API を呼び、Bearer トークンはサーバー側で付与します。
 
 ## API（認証: Bearer）
@@ -164,6 +205,8 @@ Vercel + Postgres（Neon など）では、ウィンドウタイトルに含ま�
 ```bash
 pnpm test
 ```
+
+Claude Code のクラウドセッションでは `.claude/hooks/session-start.sh` が依存導入・schema ビルド・`.env` 作成を済ませます。UI まで通す検証は `verify-shift-log` スキル（[`.claude/skills/verify-shift-log/SKILL.md`](.claude/skills/verify-shift-log/SKILL.md)）を使います。十分サマリ（LLM 要約）の質は `eval-shift-log` スキル（[`.claude/skills/eval-shift-log/SKILL.md`](.claude/skills/eval-shift-log/SKILL.md)）の eval で測り、プロンプト変更は train/test 分割でヒルクライムします。
 
 ## レビュー
 
