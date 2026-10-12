@@ -46,12 +46,13 @@ mkdir -p "$STATE_DIR/logs"
 
 echo "verify-shift-log: starting MCP on :$MCP_PORT -> $SHIFTLOG_API_ORIGIN" >&2
 # Explicit env wins over .env (load-root-env only fills unset variables).
-# --port keeps a parent SHIFTLOG_MCP_PORT=8790 from binding the user port.
+# `pnpm start --port` appends `--port` to dist/server.js. A second `--`
+# (`pnpm start -- --port`) is forwarded too, and parseConfig rejects it.
 exec_in_new_session env -u SHIFTLOG_LLM_API_KEY \
   SHIFTLOG_MCP_TOKEN="$MCP_TOKEN" \
   SHIFTLOG_API_TOKEN="$SHIFTLOG_API_TOKEN" \
   SHIFTLOG_API_ORIGIN="$SHIFTLOG_API_ORIGIN" \
-  pnpm --filter @shift-log/mcp start -- --port "$MCP_PORT" \
+  pnpm --filter @shift-log/mcp start --port "$MCP_PORT" \
   >"$STATE_DIR/logs/mcp.log" 2>&1 &
 MCP_PID=$!
 

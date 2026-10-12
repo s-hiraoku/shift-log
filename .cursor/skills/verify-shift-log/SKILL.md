@@ -43,7 +43,7 @@ Env the helper sets (do not inherit `DATABASE_URL`, `SHIFTLOG_LLM_API_KEY`, or `
 
 Launch also `unset`s `SHIFTLOG_LLM_API_KEY` so demo titles stay on the deterministic template.
 
-MCP is a second process, started only by `helpers/launch-mcp.sh` after the API is healthy. The helper builds `@shift-log/mcp` if needed, then runs `pnpm --filter @shift-log/mcp start -- --port <port>` with a new `SHIFTLOG_MCP_TOKEN` (64 hex chars, different from `SHIFTLOG_API_TOKEN`) and this instance's `SHIFTLOG_API_ORIGIN`. Ready when `POST $SHIFTLOG_MCP_ORIGIN/mcp` with that bearer and an MCP `initialize` body returns HTTP 200 (log line: `ShiftLog MCP listening on http://127.0.0.1:<port>/mcp`). Do not point it at `8790` unless this run's state file owns that port.
+MCP is a second process, started only by `helpers/launch-mcp.sh` after the API is healthy. The helper builds `@shift-log/mcp` if needed, then runs `pnpm --filter @shift-log/mcp start --port <port>` with a new `SHIFTLOG_MCP_TOKEN` (64 hex chars, different from `SHIFTLOG_API_TOKEN`) and this instance's `SHIFTLOG_API_ORIGIN`. Do not insert an extra `--` before `--port`; `pnpm` forwards that `--` and the server rejects it as an unknown argument. Ready when `POST $SHIFTLOG_MCP_ORIGIN/mcp` with that bearer and an MCP `initialize` body returns HTTP 200 (log line: `ShiftLog MCP listening on http://127.0.0.1:<port>/mcp`). Do not point it at `8790` unless this run's state file owns that port.
 
 Teardown is `helpers/cleanup.sh`. Two verification instances can run side by side if each has its own ports, data dir, and token. Do not point two webs at one API if either will mutate history.
 
