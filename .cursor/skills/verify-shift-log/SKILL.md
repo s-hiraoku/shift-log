@@ -1,13 +1,13 @@
 ---
 name: verify-shift-log
-description: Drive the ShiftLog web UI (and its Bearer API) the way a user does — launch an isolated local pair, seed demo memories, exercise settings / allowlist / timeline / search, and capture proof. Use when verifying ShiftLog behavior, UI, or agent context_only responses.
+description: Drive the ShiftLog web UI, its Bearer API, and the read-only MCP server the way a user or agent does — launch an isolated local pair, optionally the MCP listener, seed demo memories, exercise settings / allowlist / timeline / search / MCP tools, and capture proof. Use when verifying ShiftLog behavior, UI, agent context_only responses, or the MCP tools.
 ---
 
 # Verify ShiftLog
 
 ShiftLog is a permission-based activity-memory app. A person uses the Next.js UI; cloud agents read the same memories over HTTP as `context_only` (no Computer Use). This skill drives the **web UI** as the primary surface and uses the API only as a second view of the same user-visible state.
 
-Secondary surfaces (do not treat as the default drive target): desktop collector menu at `SHIFTLOG_CONTROL_PORT` (default `8791`), mobile collector stub, and the agent skill under `skills/shift-log/`.
+Secondary surfaces (do not treat as the default drive target): desktop collector menu at `SHIFTLOG_CONTROL_PORT` (default `8791`), mobile collector stub, and the agent skill under `skills/shift-log/`. The read-only MCP server is a mapped feature (`features/mcp-read-only.md`). `launch.sh` does not start it; run `helpers/launch-mcp.sh` against this instance. It is not the collector menu and it does not listen on the API port. The user's default MCP port is `8790`; verification picks a free port near `18790`.
 
 Never drive `http://localhost:3000` or `http://localhost:8787` unless this run started them. Those are the documented user session ports.
 
@@ -43,6 +43,8 @@ Env the helper sets (do not inherit `DATABASE_URL`, `SHIFTLOG_LLM_API_KEY`, or `
 
 Launch also `unset`s `SHIFTLOG_LLM_API_KEY` so demo titles stay on the deterministic template.
 
+MCP is a second process, started only by `helpers/launch-mcp.sh` after the API is healthy. The helper builds `@shift-log/mcp` if needed, then runs `pnpm --filter @shift-log/mcp start -- --port <port>` with a new `SHIFTLOG_MCP_TOKEN` (64 hex chars, different from `SHIFTLOG_API_TOKEN`) and this instance's `SHIFTLOG_API_ORIGIN`. Ready when `POST $SHIFTLOG_MCP_ORIGIN/mcp` with that bearer and an MCP `initialize` body returns HTTP 200 (log line: `ShiftLog MCP listening on http://127.0.0.1:<port>/mcp`). Do not point it at `8790` unless this run's state file owns that port.
+
 Teardown is `helpers/cleanup.sh`. Two verification instances can run side by side if each has its own ports, data dir, and token. Do not point two webs at one API if either will mutate history.
 
 `next dev` rewrites `apps/web/next-env.d.ts`. Next 16.3+ would also write `apps/web/AGENTS.md` / `CLAUDE.md`; this repo sets `agentRules: false` in `apps/web/next.config.ts`, so those files should not appear. Launch still snapshots `next-env.d.ts`; cleanup restores it and removes agent-rule files if a future Next version writes them. Do not commit those files from a verification run.
@@ -63,6 +65,7 @@ Require all of:
 - `GET $WEB_ORIGIN/` contains `ShiftLog`.
 - Ports are **not** `8787` / `3000` (shared user session).
 - Chrome/Chromium binary exists (`node helpers/browser.mjs chrome-path` — macOS: `/Applications/Google Chrome.app/Contents/MacOS/Google Chrome`).
+- If the state file has `MCP_PID` (after `launch-mcp.sh`): that process is running, Bearer `initialize` on `$SHIFTLOG_MCP_ORIGIN/mcp` returns HTTP 200, and `MCP_PORT` is not `8790`. A launch that never started MCP stays healthy without those lines.
 - Final line: `doctor: HEALTHY`.
 
 If doctor fails, read `$STATE_DIR/logs/api.log` and `$STATE_DIR/logs/web.log`, then cleanup and relaunch. Do not continue.
@@ -138,18 +141,23 @@ Proof standards:
 .cursor/skills/verify-shift-log/helpers/cleanup.sh
 ```
 
-Stops only the process groups for `CHROME_PID`, `WEB_PID`, and `API_PID` from the state file (SIGTERM, then SIGKILL). Launch starts API/web in a new session (`setsid`, or Python `os.setsid` on macOS — see Launch) so children (`tsx watch`, `next dev`) die with the recorded PID. Removes `$STATE_DIR` (logs, SQLite, Chrome profile) and restores `apps/web/next-env.d.ts` plus any Next-generated `AGENTS.md` / `CLAUDE.md`. Leaves `$EVIDENCE_DIR`. After cleanup, confirm the evidence files still exist.
+Stops only the process groups for `CHROME_PID`, `MCP_PID` (when `launch-mcp.sh` recorded one), `WEB_PID`, and `API_PID` from the state file (SIGTERM, then SIGKILL). Launch starts API/web in a new session (`setsid`, or Python `os.setsid` on macOS — see Launch) so children (`tsx watch`, `next dev`) die with the recorded PID. Removes `$STATE_DIR` (logs, SQLite, Chrome profile) and restores `apps/web/next-env.d.ts` plus any Next-generated `AGENTS.md` / `CLAUDE.md`. Leaves `$EVIDENCE_DIR`. After cleanup, confirm the evidence files still exist.
 
 Do not `pkill -f next` / `pkill -f tsx` / kill-by-name.
 
 ## Helpers
 
-All scripts are executable. `launch.sh` prints the state file path on stdout; other helpers read `SHIFTLOG_VERIFY_STATE`, then `SHIFTLOG_VERIFY_CURRENT` (default `/tmp/shiftlog-verify-current`). Set `SHIFTLOG_VERIFY_CURRENT` to a unique path when another verify run might own the default symlink. `browser.mjs` honors the same two variables.
+All scripts are executable. `launch.sh` prints the state file path on stdout; other helpers read `SHIFTLOG_VERIFY_STATE`, then `SHIFTLOG_VERIFY_CURRENT` (default `/tmp/shiftlog-verify-current`). Set `SHIFTLOG_VERIFY_CURRENT` to a unique path when another verify run might own the default symlink. `browser.mjs` and `mcp.mjs` honor the same two variables.
 
 | Command | What it does |
 | --- | --- |
 | `.cursor/skills/verify-shift-log/helpers/launch.sh` | Isolated API + web. No seed. Uses `exec_in_new_session` (not bare `setsid`). |
-| `.cursor/skills/verify-shift-log/helpers/doctor.sh` | Read-only health + isolation + Chrome binary check. |
+| `.cursor/skills/verify-shift-log/helpers/launch-mcp.sh` | Read-only MCP against that API. Port near `18790`, its own bearer. No seed. |
+| `.cursor/skills/verify-shift-log/helpers/doctor.sh` | Read-only health + isolation + Chrome binary check. Checks MCP only when `MCP_PID` is in the state file. |
+| `node .cursor/skills/verify-shift-log/helpers/mcp.mjs unauthorized` | POST MCP `initialize` with no bearer. Expect HTTP 401. |
+| `node .cursor/skills/verify-shift-log/helpers/mcp.mjs api-token` | Same POST using `SHIFTLOG_API_TOKEN`. Expect HTTP 401. |
+| `node .cursor/skills/verify-shift-log/helpers/mcp.mjs list` | List the five read-only tools. |
+| `node .cursor/skills/verify-shift-log/helpers/mcp.mjs call <tool> '<json>'` | Call one tool. Prints `structuredContent`. |
 | `node .cursor/skills/verify-shift-log/helpers/browser.mjs chrome-path` | Print the Chrome/Chromium binary (no instance required). |
 | `node .cursor/skills/verify-shift-log/helpers/browser.mjs <cmd>` | Chrome CDP: `start`, `goto`, `click --text`, `fill --placeholder --value`, `check --text --checked`, `wait --text`, `snapshot --path` (innerText plus `--- form fields ---`), `screenshot --path`, `eval --js`. |
 | `.cursor/skills/verify-shift-log/helpers/prove-home-seed.sh` | One mapped feature: empty home → seed button → timeline titles + API proof. |

@@ -29,8 +29,8 @@ Preconditions:
 - **Confirm save.** Run `curl -sS -H "Authorization: Bearer $SHIFTLOG_API_TOKEN" "$SHIFTLOG_API_ORIGIN/v1/permissions"`. `enabled` and `memories_enabled` are `true`. Reload `/` and expect badge `収集オン`.
 - **Pause.** Return to `/settings`. Run `check --text "一時停止（メニューバー / コントロールセンター相当）" --checked true` and `click --text "保存"`. Permissions show `paused: true` while the two enable flags stay true. Home badge stays `収集オン` (ready is enable+memories, not pause).
 - **Unpause.** `check --text "一時停止（メニューバー / コントロールセンター相当）" --checked false` and `保存`. `paused` is `false`.
-- **Delete last 10 minutes.** After a seed, on `/settings` run `click --text "直近十分"`. Status is `削除完了`. Timeline keeps `Code / Chrome — 10分サマリ` and `Terminal / Slack — 10分サマリ`, and drops `Safari — 10分サマリ`.
-- **Delete last day.** Then `click --text "一日"`. Status is `削除完了`. The remaining demo rows disappear. `一日` is a rolling 24 hours, not a calendar day; every demo window is under an hour old. If `last_day` were still 24 minutes, Code (`window_end` ~30 minutes ago) would remain.
+- **Delete last 10 minutes.** After a seed, on `/settings` run `click --text "直近十分"`. Status is `削除完了: windows=N, memories=N` (N ≥ 1). Timeline keeps `Code / Chrome — 10分サマリ` and `Terminal / Slack — 10分サマリ`, and drops `Safari — 10分サマリ`.
+- **Delete last day.** Then `click --text "一日"`. Status is `削除完了: windows=N, memories=N`. The remaining demo rows disappear. `一日` is a rolling 24 hours, not a calendar day; every demo window is under an hour old. If `last_day` were still 24 minutes, Code (`window_end` ~30 minutes ago) would remain.
 - **Delete all.** Re-seed if the timeline is already empty, then `click --text "全部"`. Status is `削除完了: windows=N, memories=N` with N ≥ 1. `GET /v1/timeline` is `{"items":[],"next_cursor":null}`. `/timeline` shows `まだ記憶がありません。収集を有効化して窓をアップロードしてください。`
 - **Proof.** Screenshot of Settings after save (badges + `保存しました`) and the timeline empty state after `全部`, plus the permissions/timeline JSON. Feature id `settings-collection`.
 

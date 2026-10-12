@@ -48,3 +48,4 @@ Keep implementation details out of the map. Name only user paths, stable handles
 - [Settings collection and history delete](./settings-collection.md) covers the three collection checkboxes, save, and irreversible history delete.
 - [App and site allowlist](./allowlist.md) covers exclude/include modes and persisting the lists.
 - [Agent continue is context only](./agent-continue.md) covers `/v1/agent/continue` and `/v1/agent/recent` returning `mode: context_only` without acting, and lists keyword matches ahead of newer non-matches.
+- [Read-only MCP server](./mcp-read-only.md) covers the loopback MCP listener (`SHIFTLOG_MCP_TOKEN`, five read-only tools, search over title, description, body, apps, and entity values). macOS LaunchAgent `com.shiftlog.mcp` is opt-in and is not driven from Linux.
