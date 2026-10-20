@@ -61,6 +61,19 @@ describe("ShiftLog API", () => {
     expect(res.status).toBe(401);
   });
 
+  it("returns 400 instead of 500 for invalid query or body", async () => {
+    const timeline = await app.request("/v1/timeline?limit=200", { headers: authHeaders() });
+    expect(timeline.status).toBe(400);
+    expect((await timeline.json()).error).toBe("invalid_request");
+
+    const del = await app.request("/v1/history/delete", {
+      method: "POST",
+      headers: authHeaders(),
+      body: JSON.stringify({ scope: "forever" }),
+    });
+    expect(del.status).toBe(400);
+  });
+
   it("blocks window upload when default-off", async () => {
     const w = recentWindow("w1");
     const res = await app.request("/v1/windows", {

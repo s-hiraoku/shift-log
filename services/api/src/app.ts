@@ -1,5 +1,6 @@
 import { Hono } from "hono";
 import { cors } from "hono/cors";
+import { ZodError } from "zod";
 import {
   ContinueContextRequestSchema,
   DeleteRequestSchema,
@@ -41,6 +42,14 @@ function corsOrigin(): string | string[] {
 
 export function createApp() {
   const app = new Hono<AppEnv>();
+
+  app.onError((err, c) => {
+    if (err instanceof ZodError) {
+      return c.json({ error: "invalid_request", issues: err.issues }, 400);
+    }
+    console.error(err);
+    return c.text("Internal Server Error", 500);
+  });
 
   app.use(
     "*",
