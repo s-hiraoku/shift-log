@@ -143,6 +143,24 @@ describe("observeFrontWindow", () => {
     expect(front?.privateBrowsingUnknown).toBeUndefined();
   });
 
+  it("fills an empty Chrome window name with the active tab title", async () => {
+    const exec: ExecFileFn = async (file, args) => {
+      if (file === "osascript" && args[1]?.includes("System Events")) {
+        return { stdout: "Google Chrome\t\n", stderr: "" };
+      }
+      if (file === "osascript" && args[1]?.includes("Google Chrome")) {
+        return {
+          stdout: "normal\thttps://github.com/s-hiraoku/shift-log/pull/72\tPR #72 · s-hiraoku/shift-log\n",
+          stderr: "",
+        };
+      }
+      throw new Error(`unexpected ${file} ${args.join(" ")}`);
+    };
+    const front = await observeFrontWindow({ platform: "darwin", exec });
+    expect(front?.title).toBe("PR #72 · s-hiraoku/shift-log");
+    expect(front?.site).toBe("github.com");
+  });
+
   it("marks a Chrome incognito window and does not keep the tab path", async () => {
     const exec: ExecFileFn = async (file, args) => {
       if (file === "osascript" && args[1]?.includes("System Events")) {
