@@ -16,6 +16,15 @@ import {
   type TenantSnapshot,
 } from "./persist.js";
 
+export function memoryCursor(memory: MemoryRecord): string {
+  return `${memory.front_matter.window_start}|${memory.id}`;
+}
+
+function parseMemoryCursor(cursor: string): { windowStart: string; id: string } {
+  const sep = cursor.indexOf("|");
+  return { windowStart: cursor.slice(0, sep), id: cursor.slice(sep + 1) };
+}
+
 function memoryMatchesQuery(memory: MemoryRecord, q: string): boolean {
   const hay = [
     memory.front_matter.title,
@@ -156,10 +165,22 @@ export class MemoryStore {
     windowStartLt?: string;
     since?: string;
     until?: string;
+    cursor?: string;
   }): MemoryRecord[] {
-    let items = [...this.memories.values()].sort((a, b) =>
-      b.front_matter.window_start.localeCompare(a.front_matter.window_start),
+    // 同じ window_start（6 時間と 10 分の境界など）でも順序が揺れないよう id を第 2 キーにする
+    let items = [...this.memories.values()].sort(
+      (a, b) =>
+        b.front_matter.window_start.localeCompare(a.front_matter.window_start) ||
+        b.id.localeCompare(a.id),
     );
+    if (opts.cursor) {
+      const { windowStart, id } = parseMemoryCursor(opts.cursor);
+      items = items.filter(
+        (m) =>
+          m.front_matter.window_start < windowStart ||
+          (m.front_matter.window_start === windowStart && m.id < id),
+      );
+    }
     if (opts.kind) {
       items = items.filter((m) => m.front_matter.kind === opts.kind);
     }

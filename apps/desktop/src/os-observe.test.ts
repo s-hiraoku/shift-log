@@ -67,6 +67,20 @@ describe("interpretWindowTitle", () => {
     });
   });
 
+  it("reads host: name and repo [branch] terminal titles as projects", () => {
+    expect(interpretWindowTitle("ghostty", "PC-05481.local: misc-ui-v2")).toEqual({
+      project: "misc-ui-v2",
+    });
+    expect(interpretWindowTitle("ghostty", "🔔 PC-05481.local: misc-ui-v2")).toEqual({
+      project: "misc-ui-v2",
+    });
+    expect(interpretWindowTitle("ghostty", "shift-log [main]")).toEqual({
+      project: "shift-log",
+      branch: "main",
+    });
+    expect(interpretWindowTitle("ghostty", "nvim: notes.md")).toBeUndefined();
+  });
+
   it("leaves username-only and command-only terminal titles unstructured", () => {
     expect(interpretWindowTitle("ghostty", "hiraoku.shinichi")).toBeUndefined();
     expect(interpretWindowTitle("ghostty", "pnpm install")).toBeUndefined();
@@ -141,6 +155,24 @@ describe("observeFrontWindow", () => {
     expect(front?.urlPath).toBe("/s-hiraoku/shift-log/pull/98");
     expect(front?.privateBrowsing).toBeUndefined();
     expect(front?.privateBrowsingUnknown).toBeUndefined();
+  });
+
+  it("fills an empty Chrome window name with the active tab title", async () => {
+    const exec: ExecFileFn = async (file, args) => {
+      if (file === "osascript" && args[1]?.includes("System Events")) {
+        return { stdout: "Google Chrome\t\n", stderr: "" };
+      }
+      if (file === "osascript" && args[1]?.includes("Google Chrome")) {
+        return {
+          stdout: "normal\thttps://github.com/s-hiraoku/shift-log/pull/72\tPR #72 · s-hiraoku/shift-log\n",
+          stderr: "",
+        };
+      }
+      throw new Error(`unexpected ${file} ${args.join(" ")}`);
+    };
+    const front = await observeFrontWindow({ platform: "darwin", exec });
+    expect(front?.title).toBe("PR #72 · s-hiraoku/shift-log");
+    expect(front?.site).toBe("github.com");
   });
 
   it("marks a Chrome incognito window and does not keep the tab path", async () => {

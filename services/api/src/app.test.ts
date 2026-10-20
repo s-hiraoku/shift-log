@@ -61,6 +61,19 @@ describe("ShiftLog API", () => {
     expect(res.status).toBe(401);
   });
 
+  it("returns 400 instead of 500 for invalid query or body", async () => {
+    const timeline = await app.request("/v1/timeline?limit=200", { headers: authHeaders() });
+    expect(timeline.status).toBe(400);
+    expect((await timeline.json()).error).toBe("invalid_request");
+
+    const del = await app.request("/v1/history/delete", {
+      method: "POST",
+      headers: authHeaders(),
+      body: JSON.stringify({ scope: "forever" }),
+    });
+    expect(del.status).toBe(400);
+  });
+
   it("blocks window upload when default-off", async () => {
     const w = recentWindow("w1");
     const res = await app.request("/v1/windows", {
@@ -480,6 +493,49 @@ describe("ShiftLog API", () => {
       tensBody.items.every((m: { front_matter: { kind: string } }) => m.front_matter.kind === "ten_minute"),
     ).toBe(true);
     expect(tensBody.items.length).toBeGreaterThan(0);
+  });
+
+  it("pages the timeline with next_cursor without skipping memories that share window_start", async () => {
+    const shared = new Date(Date.now() - 60 * 60_000).toISOString();
+    const older = new Date(Date.now() - 2 * 60 * 60_000).toISOString();
+    for (const [id, start] of [
+      ["six", shared],
+      ["ten", shared],
+      ["old", older],
+    ] as const) {
+      store.putMemory({
+        id,
+        created_at: start,
+        updated_at: start,
+        front_matter: {
+          title: id,
+          description: "",
+          apps: ["Code"],
+          device: "desk",
+          window_start: start,
+          window_end: start,
+          kind: "ten_minute",
+          window_ids: [id],
+          skill_candidate: false,
+        },
+        body: "",
+      });
+    }
+
+    const seen: string[] = [];
+    let cursor: string | null = null;
+    do {
+      const qs: string = cursor ? `&cursor=${encodeURIComponent(cursor)}` : "";
+      const res = await app.request(`/v1/timeline?limit=1${qs}`, { headers: authHeaders() });
+      expect(res.status).toBe(200);
+      const body = (await res.json()) as { items: { id: string }[]; next_cursor: string | null };
+      seen.push(...body.items.map((m) => m.id));
+      cursor = body.next_cursor;
+    } while (cursor);
+    expect(seen).toEqual(["ten", "six", "old"]);
+
+    const bad = await app.request("/v1/timeline?cursor=garbage", { headers: authHeaders() });
+    expect(bad.status).toBe(400);
   });
 
   it("continues with a keyword that is not in the recent window", async () => {

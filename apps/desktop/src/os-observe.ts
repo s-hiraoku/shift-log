@@ -62,9 +62,20 @@ function interpretEditorTitle(title: string, app: string): WindowTitleMeta | und
   return { project: first, file: last };
 }
 
+function interpretLabel(label: string): WindowTitleMeta | undefined {
+  const bracketed = label.match(/^(\S+)\s+\[([^\]]+)\]$/);
+  if (bracketed) return { project: bracketed[1]!, branch: bracketed[2]! };
+  return /^\S+$/.test(label) ? { project: label } : undefined;
+}
+
 function interpretTerminalTitle(title: string): WindowTitleMeta | undefined {
-  const head = titleSegments(title)[0];
+  const head = titleSegments(title)[0]?.replace(/^\p{Extended_Pictographic}\s*/u, "");
   if (!head) return undefined;
+  // "host.local: name" 形式（herdr など）。ドット無しのホストは "nvim: file" と区別できないので読まない
+  const hosted = head.match(/^[A-Za-z0-9-]+(?:\.[A-Za-z0-9-]+)+:\s*(.+)$/);
+  if (hosted) return interpretLabel(hosted[1]!.trim());
+  const bracketed = head.match(/^\S+\s+\[[^\]]+\]$/);
+  if (bracketed) return interpretLabel(head);
   const branched = head.match(/^(.*)\s+\(([^)]+)\)\s*$/);
   if (branched) {
     const cwd = branched[1]!.trim();
@@ -138,7 +149,7 @@ async function observeMac(exec: ExecFileFn): Promise<FrontWindow | null> {
   const [appRaw, ...rest] = stdout.replace(/\r/g, "").trim().split("\t");
   const app = (appRaw ?? "").trim();
   if (!app) return null;
-  const title = rest.join("\t").trim();
+  let title = rest.join("\t").trim();
   let site = siteFromTitle(title, app);
   let urlPath: string | undefined;
   let privateBrowsing = false;
@@ -158,7 +169,11 @@ async function observeMac(exec: ExecFileFn): Promise<FrontWindow | null> {
       if (read.host) site = read.host;
       privateBrowsing = read.privacy === "private";
       privateBrowsingUnknown = read.privacy === "unknown";
-      if (read.privacy === "normal") urlPath = read.path;
+      if (read.privacy === "normal") {
+        urlPath = read.path;
+        // System Events は Chrome のウィンドウ名を空で返すため、タブタイトルで補う
+        title ||= read.title ?? "";
+      }
     }
   } catch {
     // Automation permission denied, or the browser has no mode property.
@@ -197,7 +212,7 @@ function safariTabScript(): string {
 function chromeTabScript(app: string): string {
   return [
     "set sep to ASCII character 9",
-    `tell application "${app}" to return (mode of front window as string) & sep & (URL of active tab of front window)`,
+    `tell application "${app}" to return (mode of front window as string) & sep & (URL of active tab of front window) & sep & (title of active tab of front window)`,
   ].join("\n");
 }
 
@@ -205,8 +220,9 @@ function readTabProbe(stdout: string): {
   privacy: "private" | "normal" | "unknown";
   host?: string;
   path?: string;
+  title?: string;
 } {
-  const [modeRaw, ...rest] = stdout.replace(/\r/g, "").trim().split("\t");
+  const [modeRaw, urlRaw, ...titleParts] = stdout.replace(/\r/g, "").trim().split("\t");
   const mode = (modeRaw ?? "").trim().toLowerCase();
   const privacy =
     mode === "incognito" || mode === "private"
@@ -214,9 +230,10 @@ function readTabProbe(stdout: string): {
       : mode === "normal"
         ? "normal"
         : "unknown";
-  const parsed = hostAndPath(rest.join("\t"));
-  if (parsed?.kind !== "absolute") return { privacy };
-  return { privacy, host: parsed.host, path: parsed.path };
+  const title = titleParts.join("\t").trim() || undefined;
+  const parsed = hostAndPath(urlRaw ?? "");
+  if (parsed?.kind !== "absolute") return { privacy, title };
+  return { privacy, host: parsed.host, path: parsed.path, title };
 }
 
 async function observeLinux(exec: ExecFileFn): Promise<FrontWindow | null> {

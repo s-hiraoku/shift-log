@@ -1,5 +1,6 @@
 import { Hono } from "hono";
 import { cors } from "hono/cors";
+import { ZodError } from "zod";
 import {
   ContinueContextRequestSchema,
   DeleteRequestSchema,
@@ -13,7 +14,13 @@ import { rateLimit } from "./middleware/rate-limit.js";
 import { audit } from "./lib/audit.js";
 import { extractKeywords, mergeContinueMemories, rankKeywordHits } from "./lib/continue-context.js";
 import { sanitizeWindowUpload } from "./lib/sanitize.js";
-import { isRawWindowExpired, purgeAllTenants, storeFor, type MemoryStore } from "./lib/store.js";
+import {
+  isRawWindowExpired,
+  memoryCursor,
+  purgeAllTenants,
+  storeFor,
+  type MemoryStore,
+} from "./lib/store.js";
 import {
   sixHourBucketUtc,
   summarizeSixHourBundle,
@@ -41,6 +48,14 @@ function corsOrigin(): string | string[] {
 
 export function createApp() {
   const app = new Hono<AppEnv>();
+
+  app.onError((err, c) => {
+    if (err instanceof ZodError) {
+      return c.json({ error: "invalid_request", issues: err.issues }, 400);
+    }
+    console.error(err);
+    return c.text("Internal Server Error", 500);
+  });
 
   app.use(
     "*",
@@ -177,7 +192,10 @@ export function createApp() {
       since: c.req.query("since") || undefined,
       until: c.req.query("until") || undefined,
     });
-    return c.json({ items: tenant(c).listMemories(query), next_cursor: null });
+    const page = tenant(c).listMemories({ ...query, limit: query.limit + 1 });
+    const items = page.slice(0, query.limit);
+    const next_cursor = page.length > query.limit ? memoryCursor(items[items.length - 1]!) : null;
+    return c.json({ items, next_cursor });
   });
 
   app.get("/v1/memories/:id", (c) => {

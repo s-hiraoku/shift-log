@@ -20,3 +20,4 @@ data
 .claude/hillclimb/*/report.html
 .claude/hillclimb/*/state.json
 .claude/hillclimb/*/trajectory/
+.vitest/
