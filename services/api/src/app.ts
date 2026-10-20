@@ -14,7 +14,13 @@ import { rateLimit } from "./middleware/rate-limit.js";
 import { audit } from "./lib/audit.js";
 import { extractKeywords, mergeContinueMemories, rankKeywordHits } from "./lib/continue-context.js";
 import { sanitizeWindowUpload } from "./lib/sanitize.js";
-import { isRawWindowExpired, purgeAllTenants, storeFor, type MemoryStore } from "./lib/store.js";
+import {
+  isRawWindowExpired,
+  memoryCursor,
+  purgeAllTenants,
+  storeFor,
+  type MemoryStore,
+} from "./lib/store.js";
 import {
   sixHourBucketUtc,
   summarizeSixHourBundle,
@@ -186,7 +192,10 @@ export function createApp() {
       since: c.req.query("since") || undefined,
       until: c.req.query("until") || undefined,
     });
-    return c.json({ items: tenant(c).listMemories(query), next_cursor: null });
+    const page = tenant(c).listMemories({ ...query, limit: query.limit + 1 });
+    const items = page.slice(0, query.limit);
+    const next_cursor = page.length > query.limit ? memoryCursor(items[items.length - 1]!) : null;
+    return c.json({ items, next_cursor });
   });
 
   app.get("/v1/memories/:id", (c) => {

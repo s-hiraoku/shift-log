@@ -36,7 +36,7 @@ export SHIFTLOG_API_ORIGIN="${SHIFTLOG_API_ORIGIN:-http://localhost:8787}"
 export SHIFTLOG_API_TOKEN="${SHIFTLOG_API_TOKEN:-$(grep -E '^SHIFTLOG_API_TOKEN=' "${SHIFTLOG_SRC_DIR:-$HOME/.local/share/shiftlog/src}/.env" | cut -d= -f2- | tr -d "\"'")}"
 ```
 
-Auth: `Authorization: Bearer $SHIFTLOG_API_TOKEN` on every `/v1/*` call. Never print the token. Keep `limit` ≤ 100 on timeline/search (≤ 36 on continue); larger values return 400 `invalid_request`.
+Auth: `Authorization: Bearer $SHIFTLOG_API_TOKEN` on every `/v1/*` call. Never print the token. Keep `limit` ≤ 100 on timeline/search (≤ 36 on continue); larger values return 400 `invalid_request`. On timeline, pass `next_cursor` back as `cursor` until it is `null` to read past one page.
 
 ## Core workflow: continue as context_only
 

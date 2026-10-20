@@ -495,6 +495,49 @@ describe("ShiftLog API", () => {
     expect(tensBody.items.length).toBeGreaterThan(0);
   });
 
+  it("pages the timeline with next_cursor without skipping memories that share window_start", async () => {
+    const shared = new Date(Date.now() - 60 * 60_000).toISOString();
+    const older = new Date(Date.now() - 2 * 60 * 60_000).toISOString();
+    for (const [id, start] of [
+      ["six", shared],
+      ["ten", shared],
+      ["old", older],
+    ] as const) {
+      store.putMemory({
+        id,
+        created_at: start,
+        updated_at: start,
+        front_matter: {
+          title: id,
+          description: "",
+          apps: ["Code"],
+          device: "desk",
+          window_start: start,
+          window_end: start,
+          kind: "ten_minute",
+          window_ids: [id],
+          skill_candidate: false,
+        },
+        body: "",
+      });
+    }
+
+    const seen: string[] = [];
+    let cursor: string | null = null;
+    do {
+      const qs: string = cursor ? `&cursor=${encodeURIComponent(cursor)}` : "";
+      const res = await app.request(`/v1/timeline?limit=1${qs}`, { headers: authHeaders() });
+      expect(res.status).toBe(200);
+      const body = (await res.json()) as { items: { id: string }[]; next_cursor: string | null };
+      seen.push(...body.items.map((m) => m.id));
+      cursor = body.next_cursor;
+    } while (cursor);
+    expect(seen).toEqual(["ten", "six", "old"]);
+
+    const bad = await app.request("/v1/timeline?cursor=garbage", { headers: authHeaders() });
+    expect(bad.status).toBe(400);
+  });
+
   it("continues with a keyword that is not in the recent window", async () => {
     const older = "2026-09-10T08:00:00.000Z";
     store.putMemory({

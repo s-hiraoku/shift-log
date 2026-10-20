@@ -25,7 +25,8 @@ export type DeleteResult = z.infer<typeof DeleteResultSchema>;
 export const TimelineQuerySchema = z.object({
   q: z.string().optional(),
   limit: z.coerce.number().int().positive().max(100).default(50),
-  cursor: z.string().optional(),
+  // next_cursor の値をそのまま渡す（"<window_start>|<memory id>"）
+  cursor: z.string().regex(/^[^|]+\|.+$/).optional(),
   kind: MemoryKindSchema.optional(),
   since: z.iso.datetime().optional(),
   until: z.iso.datetime().optional(),
