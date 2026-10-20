@@ -67,6 +67,20 @@ describe("interpretWindowTitle", () => {
     });
   });
 
+  it("reads host: name and repo [branch] terminal titles as projects", () => {
+    expect(interpretWindowTitle("ghostty", "PC-05481.local: misc-ui-v2")).toEqual({
+      project: "misc-ui-v2",
+    });
+    expect(interpretWindowTitle("ghostty", "🔔 PC-05481.local: misc-ui-v2")).toEqual({
+      project: "misc-ui-v2",
+    });
+    expect(interpretWindowTitle("ghostty", "shift-log [main]")).toEqual({
+      project: "shift-log",
+      branch: "main",
+    });
+    expect(interpretWindowTitle("ghostty", "nvim: notes.md")).toBeUndefined();
+  });
+
   it("leaves username-only and command-only terminal titles unstructured", () => {
     expect(interpretWindowTitle("ghostty", "hiraoku.shinichi")).toBeUndefined();
     expect(interpretWindowTitle("ghostty", "pnpm install")).toBeUndefined();
