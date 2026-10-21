@@ -46,6 +46,7 @@ Exit 0. JSON has `mode` exactly `context_only`, `prompt` exactly `続きやっ�
 - **Recent read.** Run `curl -sS "$SHIFTLOG_API_ORIGIN/v1/agent/recent?limit=12" -H "Authorization: Bearer $SHIFTLOG_API_TOKEN"`. `mode` is `context_only`. There is no `prompt` field. `memories` is a list.
 - **Empty instance.** On an unseeded launch, POST continue. `mode` is still `context_only` and `memories` is `[]`. That is success, not a failed resume.
 - **Unauthorized miss.** `curl -sS -o /tmp/unauth.json -w "%{http_code}" "$SHIFTLOG_API_ORIGIN/v1/agent/recent"` without a Bearer header is `401` and `{"error":"unauthorized"}`. Do not retry with the instance token and call that the unauth proof.
+- **Over-limit.** POST continue with `{"prompt":"続きやって","limit":200}`. HTTP 400 and `"error":"invalid_request"`. GET `$SHIFTLOG_API_ORIGIN/v1/agent/recent?limit=200` with the Bearer token stays HTTP 200, `mode` `context_only`. Recent does not use the continue schema: a large `limit` is capped at 36 instead of rejected.
 - **Proof.** Save both JSON bodies under `$EVIDENCE_DIR/agent-continue/`. Record feature id `agent-continue` and the entry (`POST /v1/agent/continue`). There is no screenshot for this path unless you also keep the timeline visible as supporting context.
 
 ## Gotchas
@@ -54,5 +55,5 @@ Exit 0. JSON has `mode` exactly `context_only`, `prompt` exactly `続きやっ�
 - Keyword search uses the same haystack as `/v1/search` (title, description, body, apps, entity values). A prompt that appears only in the row description still tags `matched_by` `keyword`.
 - Prompt `Safari` does not prove ranking. Its only keyword row is also the newest demo window, so the list looks like recency. Prompt `Slack` matches the older `Terminal / Slack — 10分サマリ` row and still places it first.
 - Continue never launches the desktop collector, never opens Chrome except the verification driver, and never POSTs `/v1/windows`. If those side effects appear, the proof failed.
-- `limit` defaults in schema; passing `"limit":12` matches the bundled skill. Do not send a Computer Use payload — the route does not accept one.
+- `limit` defaults to 12. Passing `"limit":12` matches the bundled skill. Continue rejects a positive integer above 36 with 400 `invalid_request` (not 500). `GET /v1/agent/recent?limit=200` does not return that 400. Do not send a Computer Use payload — the route does not accept one.
 - This feature has no UI entry. Do not report it verified by looking at the timeline page alone.

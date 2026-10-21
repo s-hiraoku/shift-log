@@ -94,6 +94,8 @@ curl -sS -H "Authorization: Bearer $SHIFTLOG_API_TOKEN" "$SHIFTLOG_API_ORIGIN/v1
 curl -sS -H "Authorization: Bearer $SHIFTLOG_API_TOKEN" "$SHIFTLOG_API_ORIGIN/v1/permissions"
 ```
 
+`GET /v1/timeline` includes `next_cursor`. It is `null` when the page is not full (an empty instance, or the three demo rows at the default limit of 50). When it is set, the value is `<window_start>|<id>`; pass it back as the `cursor` query. `limit` above 100, a cursor that does not match that shape, and an unknown `POST /v1/history/delete` scope return 400 `{"error":"invalid_request"}`. Continue `limit` above 36 is the same 400. `GET /v1/agent/recent?limit=200` stays 200 and returns at most 36 memories.
+
 Stable handles observed in `apps/web` (Japanese UI, `lang=ja`):
 
 | Control | Handle |
