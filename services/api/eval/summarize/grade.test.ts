@@ -127,6 +127,22 @@ describe("summarize eval graders", () => {
     expect(falseCue.grade.continuity).toBe(0);
   });
 
+  it("never send what the sanitizer drops to the LLM", async () => {
+    for (const c of CASES.filter((x) => x.tags[0] === "sensitive")) {
+      const fetchMock = vi.fn(async (_url: unknown, _init?: RequestInit) =>
+        new Response(JSON.stringify({ choices: [{ message: { content: JSON.stringify(c.oracle) } }] }), {
+          status: 200,
+        }),
+      );
+      vi.stubGlobal("fetch", fetchMock);
+      const store = new MemoryStore(`grade_prompt_${c.id}`);
+      await summarizeTenMinuteWindow(store, sanitizeWindowUpload(c.upload, store.permissions));
+      const sent = fetchMock.mock.calls.map(([, init]) => String(init?.body ?? "")).join("\n").toLowerCase();
+      expect(sent.length, c.id).toBeGreaterThan(0);
+      for (const s of c.expect.forbidden) expect(sent.includes(s.toLowerCase()), `${c.id}: ${s}`).toBe(false);
+    }
+  });
+
   it("keep sanitized secrets out of the stored memory even without an LLM", async () => {
     delete process.env.SHIFTLOG_LLM_API_KEY;
     for (const c of CASES.filter((x) => x.tags[0] === "sensitive")) {

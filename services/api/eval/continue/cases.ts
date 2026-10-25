@@ -6,8 +6,10 @@ import { CASES as WINDOWS } from "../summarize/cases.js";
  * library of stored memories, does the endpoint put the memory the person means
  * first?
  *
- * The library is the 24 summarize-eval windows stored as if the LLM had written
- * their oracle summary, so both evals describe the same synthetic week.
+ * The library is the first 24 summarize-eval windows stored as if the LLM had
+ * written their oracle summary, so both evals describe the same synthetic week.
+ * Windows added to the summarize eval later are left out: `relevant` below was
+ * labeled against these 24, and an unlabeled window would count as a wrong hit.
  *
  * kind (tags[0]):
  * - topic_ja / topic_en: the prompt names the work; `relevant` lists every memory about it
@@ -21,8 +23,10 @@ export type ContinueCase = {
   relevant: string[];
 };
 
+const LIBRARY_SIZE = 24;
+
 export function libraryMemories(): MemoryRecord[] {
-  return WINDOWS.map((w) => {
+  return WINDOWS.slice(0, LIBRARY_SIZE).map((w) => {
     const { window_start, window_end, devices } = w.upload.metadata;
     const apps = [...new Set(w.upload.events.map((e) => e.app).filter((a): a is string => Boolean(a)))];
     const unfinished = w.oracle.unfinished.trim() || "（なし）";
