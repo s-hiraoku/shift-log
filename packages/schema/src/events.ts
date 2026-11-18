@@ -17,6 +17,7 @@ export const EventTypeSchema = z.enum([
   "shortcut",
   "app_switch",
   "front_window_summary",
+  "accessibility_snapshot",
   "screen_enter",
   "screen_exit",
   "browser_navigation",
@@ -46,6 +47,12 @@ export const InteractionEventSchema = z.object({
     .optional(),
   shortcut: z.string().optional(),
   urlPath: z.string().optional(),
+  /** Observed accessibility text, not a complete conversation transcript. */
+  ax: z.object({
+    title: z.string().max(2000),
+    text: z.string().min(1).max(12000),
+    truncated: z.boolean(),
+  }).optional(),
   meta: z.record(z.string(), z.unknown()).optional(),
 });
 export type InteractionEvent = z.infer<typeof InteractionEventSchema>;

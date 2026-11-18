@@ -7,6 +7,7 @@ import {
   TimelineQuerySchema,
   WindowUploadSchema,
   canCollect,
+  ActivityQuerySchema,
 } from "@shift-log/schema";
 import { requireAuth } from "./middleware/auth.js";
 import { rateLimit } from "./middleware/rate-limit.js";
@@ -20,6 +21,7 @@ import {
   summarizeTenMinuteWindow,
 } from "./jobs/summarize.js";
 import { seedDemoData } from "./lib/demo.js";
+import { getActivity, searchActivity } from "./lib/activity.js";
 
 const MAX_UPLOAD_BYTES = Number(process.env.SHIFTLOG_MAX_UPLOAD_BYTES ?? 512_000);
 
@@ -166,6 +168,20 @@ export function createApp() {
       accepted_events: upload.events.length,
       summarize_queued: true,
     });
+  });
+
+  app.get("/v1/activity", (c) => {
+    const parsed = ActivityQuerySchema.safeParse(c.req.query());
+    if (!parsed.success) return c.json({ error: "invalid_activity_query", details: parsed.error.issues }, 400);
+    const store = tenant(c);
+    const result = searchActivity(store.windows.values(), store.permissions, parsed.data);
+    return result ? c.json(result) : c.json({ error: "invalid_cursor" }, 400);
+  });
+
+  app.get("/v1/activity/:id", (c) => {
+    const store = tenant(c);
+    const result = getActivity(store.windows.values(), store.permissions, c.req.param("id"));
+    return result ? c.json(result) : c.json({ error: "not_found_or_expired" }, 404);
   });
 
   app.get("/v1/timeline", (c) => {

@@ -6,6 +6,7 @@ import {
   redactEvent,
   titleLooksPrivate,
   PermissionsConfigSchema,
+  canCaptureAccessibility,
   type InteractionEvent,
   type PermissionsConfig,
   type WindowUpload,
@@ -23,6 +24,7 @@ export function sanitizeWindowUpload(
 ): WindowUpload {
   const events = upload.events
     .filter((event) => !isPrivateBrowsing(event))
+    .filter((event) => !event.ax || canCaptureAccessibility({ ...event, title: event.ax.title }, permissions))
     .map(stripProhibitedMeta)
     .map((event) => applyCapturePolicy(event, permissions))
     .map(redactEvent);

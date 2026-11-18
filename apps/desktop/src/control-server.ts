@@ -5,6 +5,8 @@ export type ControlState = {
   paused: boolean;
   lastApp?: string;
   lastObserveAt?: string;
+  axStatus?: string;
+  lastAxAt?: string;
 };
 
 function escapeHtml(value: string): string {

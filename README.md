@@ -95,6 +95,7 @@ npm exec --package="$(node -p "require('./package.json').packageManager")" -- pn
 - ユーザ単位のデータ分離（`SHIFTLOG_API_TOKENS`）。トークン未設定時は起動拒否（fail-closed）
 - レート制限・アップロード上限・監査ログ・48h purge（自前ホスト + Vercel Cron）
 - エージェント向け `context_only`（Computer Use なし）
+- macOS の前面ウィンドウのAXテキスト収集と、会話本文の検索・取得（[使い方](docs/accessibility-history.md)）
 
 運用手順（常駐・キーチェーン・Cron・署名）: [`docs/ops.md`](docs/ops.md)。macOS の常駐は `pnpm setup:launchd`（`node` のフルパスと `dist/*.js`。手で `YOU` を書き換えない）。
 
@@ -139,6 +140,8 @@ pnpm --filter @shift-log/desktop collect
 macOS は初回にアクセシビリティ許可、Linux は `xdotool`（なければ `xprop`）が必要です。
 
 ## 読み取り専用 MCP
+
+会話本文・画面テキストは `search_activity` で検索し、返された `id` を `get_activity` に渡すと、時刻・アプリ・取得元付きの本文を読めます。`search_memories` は従来の要約検索です。AX記録は48時間保持し、履歴削除の対象です。詳細は[AX会話履歴](docs/accessibility-history.md)を参照してください。
 
 外部エージェントが記憶を読むための Streamable HTTP サーバです。書き込み、収集のオンオフ、OS 操作はありません。待受は `127.0.0.1:8790` です。API の既定はこれまでどおり `127.0.0.1:8787` です。
 
@@ -187,6 +190,8 @@ Web UI は `/api/*` の Route Handler 経由で API を呼び、Bearer トーク
 | GET | `/v1/timeline` | タイムライン一覧 |
 | GET | `/v1/memories/:id` | 記憶詳細 |
 | GET | `/v1/search?q=` | 検索 |
+| GET | `/v1/activity?q=` | AX会話本文を検索（app/since/until/limit/cursor） |
+| GET | `/v1/activity/:id` | AX本文・取得時刻・アプリを取得 |
 | POST | `/v1/history/delete` | 直近十分 / 一時間 / 一日 / 全部（イベントも記憶も削除） |
 | GET | `/v1/agent/recent` | エージェント向け直近記憶（読み取り） |
 | POST | `/v1/agent/continue` | 「続きやって」→ `mode: context_only` |

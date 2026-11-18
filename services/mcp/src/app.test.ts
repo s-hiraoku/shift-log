@@ -120,7 +120,7 @@ describe("MCP HTTP", () => {
     expect(api.requests).toEqual([]);
   });
 
-  it("lists five read-only tools and maps each call onto the ShiftLog API", async () => {
+  it("lists seven read-only tools and maps memory calls onto the ShiftLog API", async () => {
     const api = await startFakeApi({
       "GET /v1/agent/recent": { status: 200, json: RECENT },
       "POST /v1/agent/continue": { status: 200, json: CONTINUED },
@@ -142,8 +142,10 @@ describe("MCP HTTP", () => {
     const listed = await client.listTools();
     expect(listed.tools.map((tool) => tool.name).sort()).toEqual([
       "continue_context",
+      "get_activity",
       "get_memory",
       "recent_memories",
+      "search_activity",
       "search_memories",
       "timeline",
     ]);

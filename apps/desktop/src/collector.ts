@@ -20,9 +20,11 @@ import {
 } from "./os-observe.js";
 import { getApiToken } from "./credentials.js";
 import { startControlServer, type ControlState } from "./control-server.js";
+import { observeAccessibility, shouldCaptureAccessibility } from "./accessibility.js";
+import { createHash, randomUUID } from "node:crypto";
 
 /**
- * Desktop collector (v1 stub).
+ * Desktop activity and accessibility collector.
  * - Menu bar pause/resume is represented by permissions.paused
  * - Never captures screenshots, mic, system audio, or full keylogs
  * - Private browsing is permanently excluded
@@ -32,6 +34,8 @@ export class DesktopCollector {
   private buffer: InteractionEvent[] = [];
   private pausedLocal = false;
   private uploadError: string | undefined;
+  private axBytes = 0;
+  private lastAxHash: string | undefined;
 
   constructor(
     private permissions: PermissionsConfig,
@@ -49,6 +53,7 @@ export class DesktopCollector {
 
   setPermissions(permissions: PermissionsConfig): void {
     this.permissions = permissions;
+    this.lastAxHash = undefined;
   }
 
   isPaused(): boolean {
@@ -70,6 +75,7 @@ export class DesktopCollector {
   /** Menu bar: Resume */
   resume(): void {
     this.pausedLocal = false;
+    this.lastAxHash = undefined;
     this.buffer.push({
       id: `resume_${Date.now()}`,
       type: "resume",
@@ -113,6 +119,22 @@ export class DesktopCollector {
       ...redactEvent(event),
       device: "desk",
     });
+  }
+
+  observeAx(front: FrontWindow, ax: NonNullable<InteractionEvent["ax"]>): "recorded" | "unchanged" | "excluded" | "budget_exhausted" {
+    if (this.isPaused() || !shouldCaptureAccessibility(front, this.permissions)) return "excluded";
+    const clean = { ...ax, title: redactSensitiveText(ax.title), text: redactSensitiveText(ax.text) };
+    const hash = createHash("sha256").update(JSON.stringify([front.app, front.site, front.urlPath, clean])).digest("hex");
+    if (hash === this.lastAxHash) return "unchanged";
+    const size = Buffer.byteLength(JSON.stringify(clean));
+    if (this.axBytes + size > 128_000) return "budget_exhausted";
+    this.observe({ id: `ax_${randomUUID()}`, type: "accessibility_snapshot", ts: new Date().toISOString(),
+      app: front.app, site: front.site, ax: clean,
+      meta: { ...(eventMeta(front) ?? {}), ...(front.urlPath ? { pagePath: front.urlPath } : {}) },
+    });
+    this.lastAxHash = hash;
+    this.axBytes += size;
+    return "recorded";
   }
 
   drainWindow(windowStart: Date): WindowUpload {
@@ -174,6 +196,8 @@ export class DesktopCollector {
         };
       }
       this.uploadError = undefined;
+      this.axBytes = 0;
+      this.lastAxHash = undefined;
       return {
         uploaded: true,
         status: res.status,
@@ -239,8 +263,8 @@ function eventMeta(observed: FrontWindow): Record<string, unknown> | undefined {
 export function emitOsTick(
   collector: DesktopCollector,
   observed: FrontWindow,
-  last: { app: string; title: string } | null,
-): { app: string; title: string } {
+  last: { app: string; title: string; urlPath?: string } | null,
+): { app: string; title: string; urlPath?: string } {
   const now = new Date().toISOString();
   const meta = eventMeta(observed);
   if (observed.privateBrowsing) return last ?? { app: observed.app, title: observed.title };
@@ -255,7 +279,7 @@ export function emitOsTick(
       ...(meta ? { meta } : {}),
     });
   }
-  if (observed.site && (!last || last.title !== observed.title)) {
+  if (observed.site && (!last || last.title !== observed.title || last.urlPath !== observed.urlPath)) {
     collector.observe({
       id: `os_nav_${Date.now()}`,
       type: "browser_navigation",
@@ -277,7 +301,7 @@ export function emitOsTick(
       ...(meta ? { meta } : {}),
     });
   }
-  return { app: observed.app, title: observed.title };
+  return { app: observed.app, title: observed.title, ...(observed.urlPath ? { urlPath: observed.urlPath } : {}) };
 }
 
 /**
@@ -307,7 +331,7 @@ export async function main(): Promise<void> {
   let permissions = await loadPermissions();
   const collector = new DesktopCollector(permissions, apiBase, token);
   console.log(
-    "[desktop] collector ready. captures=off, private_browsing=excluded, keylog=forbidden",
+    "[desktop] collector ready. screenshots=off, AX=macOS, private_browsing=excluded, keylog=forbidden",
   );
   console.log(
     `[desktop] canCollect=${canCollect(permissions)} paused=${permissions.paused} demo=${demo}`,
@@ -316,7 +340,9 @@ export async function main(): Promise<void> {
 
   const demoApps = ["Code", "Chrome", "Terminal", "Slack", "Notion"];
   let demoIdx = 0;
-  let lastFront: { app: string; title: string } | null = null;
+  let lastFront: { app: string; title: string; urlPath?: string } | null = null;
+  let lastAxAt = 0;
+  let ticking = false;
   let windowStart = new Date();
   const control: ControlState = { paused: collector.isPaused() };
 
@@ -354,7 +380,7 @@ export async function main(): Promise<void> {
   }
 
   async function tick(): Promise<void> {
-    if (!canCollect(permissions) && !demo) return;
+    if ((!canCollect(permissions) || collector.isPaused()) && !demo) return;
     if (demo) {
       demoIdx = emitDemoTick(collector, demoApps, demoIdx);
       return;
@@ -367,6 +393,20 @@ export async function main(): Promise<void> {
     lastFront = emitOsTick(collector, observed, lastFront);
     control.lastApp = observed.app;
     control.lastObserveAt = new Date().toISOString();
+    if (process.env.SHIFTLOG_CAPTURE_AX !== "0" && Date.now() - lastAxAt >= 15_000) {
+      lastAxAt = Date.now();
+      const snapshot = await observeAccessibility(observed, permissions);
+      control.axStatus = snapshot.status;
+      if (snapshot.ax) {
+        const current = await observeFrontWindow();
+        if (current && current.app === observed.app && current.title === observed.title &&
+            current.site === observed.site && current.urlPath === observed.urlPath &&
+            shouldCaptureAccessibility(current, permissions)) {
+          control.axStatus = collector.observeAx(current, snapshot.ax);
+          if (control.axStatus === "recorded") control.lastAxAt = new Date().toISOString();
+        } else control.axStatus = "focus_changed";
+      }
+    }
     console.log(
       process.env.SHIFTLOG_DEBUG_TITLES === "1"
         ? `[desktop] observed app=${observed.app} title=${redactSensitiveText(observed.title).slice(0, 80)}`
@@ -386,7 +426,10 @@ export async function main(): Promise<void> {
   }
 
   setInterval(() => {
-    void tick().then(() => {
+    if (ticking) return;
+    ticking = true;
+    void tick().catch((error) => console.warn("[desktop] observation failed:", error)).finally(() => {
+      ticking = false;
       control.paused = collector.isPaused();
     });
   }, tickMs);

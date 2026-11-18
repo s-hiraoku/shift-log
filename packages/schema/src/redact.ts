@@ -35,7 +35,7 @@ const RULES: Rule[] = [
   // NAME=value / NAME: value / --name value / --name=value for secret-like names
   {
     pattern: new RegExp(
-      `((?:--?)?${SECRET_NAME}["']?\\s*(?:=|:\\s|\\s(?=["']))\\s*)(?:"[^"]*"|'[^']*'|[^\\s"'&;,)]+)`,
+      `(?<![A-Za-z0-9_.-])((?:--?)?${SECRET_NAME}["']?\\s*(?:=|:\\s|\\s(?=["']))\\s*)(?:"[^"]*"|'[^']*'|[^\\s"'&;,)]+)`,
       "gi",
     ),
     replace: (_m, head: string) => `${head}${REDACTED}`,
@@ -59,7 +59,7 @@ const RULES: Rule[] = [
   // Query strings carry tokens and personal data; keep only the path.
   { pattern: /(\bhttps?:\/\/[^\s?#]+)[?#][^\s]*/gi, replace: (_m, base: string) => base },
   // Email addresses
-  { pattern: /[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}/g, replace: "[email]" },
+  { pattern: /(?<![A-Za-z0-9._%+-])[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}/g, replace: "[email]" },
   // Card numbers (13–19 digits, optional separators)
   { pattern: /\b(?:\d[ -]?){12,18}\d\b/g, replace: "[number]" },
   // Phone numbers (international or Japanese style)
@@ -138,11 +138,12 @@ function redactValue(value: unknown): unknown {
 
 /** Redact every free-text field of an interaction event. */
 export function redactEvent<
-  E extends { summary?: string; urlPath?: string; shortcut?: string; meta?: Record<string, unknown> },
+  E extends { summary?: string; urlPath?: string; shortcut?: string; meta?: Record<string, unknown>; ax?: { title: string; text: string; truncated: boolean } },
 >(event: E): E {
   const next = { ...event };
   if (typeof next.summary === "string") next.summary = redactSensitiveText(next.summary);
   if (typeof next.urlPath === "string") next.urlPath = redactSensitiveText(next.urlPath.split(/[?#]/)[0]!);
   if (next.meta) next.meta = redactValue(next.meta) as Record<string, unknown>;
+  if (next.ax) next.ax = { ...next.ax, title: redactSensitiveText(next.ax.title), text: redactSensitiveText(next.ax.text) };
   return next;
 }

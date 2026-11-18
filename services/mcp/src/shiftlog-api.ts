@@ -1,4 +1,4 @@
-import type { ContinueContextRequest, MemoryKind } from "@shift-log/schema";
+import type { ActivityQuery, ContinueContextRequest, MemoryKind } from "@shift-log/schema";
 import type { z } from "zod";
 import type { ApiToken } from "./config.js";
 
@@ -20,6 +20,8 @@ export type ReadOnlyCall =
   | { method: "GET"; path: "/v1/timeline"; query: MemoryListQuery }
   | { method: "GET"; path: "/v1/search"; query: MemoryListQuery }
   | { method: "GET"; path: "/v1/memories/:id"; id: string }
+  | { method: "GET"; path: "/v1/activity"; query: ActivityQuery }
+  | { method: "GET"; path: "/v1/activity/:id"; id: string }
   | { method: "POST"; path: "/v1/agent/continue"; body: ContinueContextRequest };
 
 export type ApiFailure =
@@ -92,11 +94,11 @@ export function connectShiftLog(config: {
 
 function upstreamUrl(origin: string, call: ReadOnlyCall): URL {
   const path =
-    call.path === "/v1/memories/:id"
-      ? `/v1/memories/${encodeURIComponent(call.id)}`
+    "id" in call
+      ? call.path.replace(":id", encodeURIComponent(call.id))
       : call.path;
   const url = new URL(path, origin);
-  if (call.method === "GET" && call.path !== "/v1/memories/:id") {
+  if (call.method === "GET" && "query" in call) {
     for (const [key, value] of Object.entries(call.query)) {
       if (value !== undefined) url.searchParams.set(key, String(value));
     }

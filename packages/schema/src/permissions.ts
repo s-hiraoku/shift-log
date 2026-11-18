@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { isBrowserApp, isSensitiveApp, titleLooksPrivate } from "./redact.js";
 
 /**
  * Computer History-compatible permission model:
@@ -84,6 +85,18 @@ export function titlePolicyFor(config: PermissionsConfig, name: string): TitlePo
   return "full";
 }
 
+export function canCaptureAccessibility(
+  event: { app?: string; title?: string; site?: string; meta?: Record<string, unknown> },
+  permissions: PermissionsConfig,
+): boolean {
+  if (!event.app || isSensitiveApp(event.app) || !isSourceAllowed(permissions, "apps", event.app) ||
+      titlePolicyFor(permissions, event.app) !== "full" || event.meta?.privateBrowsing === true) return false;
+  if (event.site && !isSourceAllowed(permissions, "sites", event.site)) return false;
+  if (isBrowserApp(event.app) && (!event.site || event.meta?.privateBrowsingUnknown === true ||
+      titleLooksPrivate(event.title ?? ""))) return false;
+  return true;
+}
+
 const PATH_ONLY_BASE = "https://urlpath.invalid";
 
 export type HostAndPath =
@@ -119,9 +132,9 @@ export function hostAndPath(raw: string): HostAndPath | undefined {
 }
 
 export function omitTitleFields<
-  E extends { summary?: unknown; site?: unknown; meta?: unknown; urlPath?: unknown },
->(event: E): Omit<E, "summary" | "site" | "meta" | "urlPath"> {
-  const { summary: _summary, site: _site, meta: _meta, urlPath: _urlPath, ...rest } = event;
+  E extends { summary?: unknown; site?: unknown; meta?: unknown; urlPath?: unknown; ax?: unknown },
+>(event: E): Omit<E, "summary" | "site" | "meta" | "urlPath" | "ax"> {
+  const { summary: _summary, site: _site, meta: _meta, urlPath: _urlPath, ax: _ax, ...rest } = event;
   return rest;
 }
 
@@ -132,12 +145,13 @@ type RestrictedEvent = {
   summary?: string;
   meta?: unknown;
   urlPath?: string;
+  ax?: unknown;
 };
 
 export function omitRestrictedFields<E extends RestrictedEvent>(
   event: E,
   permissions: PermissionsConfig,
-): E | Omit<E, "urlPath"> | Omit<E, "summary" | "site" | "meta" | "urlPath"> {
+): E | Omit<E, "urlPath"> | Omit<E, "summary" | "site" | "meta" | "urlPath" | "ax"> {
   let keptPath: string | undefined;
   if (event.type === "browser_navigation" && typeof event.urlPath === "string") {
     const parsed = hostAndPath(event.urlPath);

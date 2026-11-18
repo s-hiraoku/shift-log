@@ -30,6 +30,8 @@ Authorization: Bearer <SHIFTLOG_API_TOKEN>
 | GET | `/v1/timeline` | `q?`, `limit?`, `cursor?`, `kind?`, `since?`, `until?` | Memory list. `since` / `until` are ISO 8601 and filter `window_start` inclusively |
 | GET | `/v1/search` | `q`, `limit?`, `kind?`, `since?`, `until?` | Keyword search over title/description/body/apps/`entities[].value` |
 | GET | `/v1/memories/:id` | — | Single memory |
+| GET | `/v1/activity` | `q?`, `app?`, `since?`, `until?`, `limit?`, `cursor?` | Search AX text; returns snippets, evidence IDs, `has_more`, `next_cursor`, `retention_hours: 48`. Times filter event capture time, app is an exact name. Invalid query/cursor is 400 |
+| GET | `/v1/activity/:id` | — | Captured AX `text`, title, app, timestamp, provenance, truncation flag. Missing/deleted/excluded/expired record is 404. Applies current app/site/title rules and tenant isolation |
 | POST | `/v1/history/delete` | `{ "scope": "last_10_minutes"\|"last_hour"\|"last_day"\|"all" }` | Deletes overlapping windows **and** memories |
 
 ## Agent (read-only)
