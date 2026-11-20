@@ -64,12 +64,40 @@ else
   bad "no Chrome/Chromium binary (set CHROME_PATH or install Google Chrome)"
 fi
 
+# MCP is optional until launch-mcp.sh records a pid. Once recorded, it must still be ours.
+if [[ -n "${MCP_PID:-}" ]]; then
+  if alive "$MCP_PID"; then
+    ok "MCP_PID $MCP_PID is running"
+  else
+    bad "MCP_PID ${MCP_PID:-unset} is not running"
+  fi
+  if [[ "${MCP_PORT:-}" == "8790" || "${MCP_PORT:-}" == "8787" ]]; then
+    bad "MCP uses a shared port ${MCP_PORT} (user MCP 8790 / API 8787)"
+  else
+    ok "isolated mcp port ${MCP_PORT:-unset}"
+  fi
+  init_body='{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"verify-shift-log","version":"0"}}}'
+  mcp_code="$(curl -sS -m 3 -o /dev/null -w "%{http_code}" -X POST "${SHIFTLOG_MCP_ORIGIN:-http://127.0.0.1:9}/mcp" \
+    -H "content-type: application/json" \
+    -H "accept: application/json, text/event-stream" \
+    -H "Authorization: Bearer ${SHIFTLOG_MCP_TOKEN:-}" \
+    -d "$init_body" || true)"
+  if [[ "$mcp_code" == "200" ]]; then
+    ok "MCP initialize HTTP 200"
+  else
+    bad "MCP initialize HTTP ${mcp_code:-none}"
+  fi
+else
+  ok "MCP not started (helpers/launch-mcp.sh is optional)"
+fi
+
 echo "---"
 echo "RUN_ID=$RUN_ID"
 echo "WEB_ORIGIN=$WEB_ORIGIN"
 echo "SHIFTLOG_API_ORIGIN=$SHIFTLOG_API_ORIGIN"
 echo "SHIFTLOG_DATA_DIR=$SHIFTLOG_DATA_DIR"
 echo "EVIDENCE_DIR=$EVIDENCE_DIR"
+echo "SHIFTLOG_MCP_ORIGIN=${SHIFTLOG_MCP_ORIGIN:-}"
 echo "permissions=$perms"
 
 if (( fail )); then

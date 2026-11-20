@@ -41,4 +41,4 @@ Preconditions:
 - Titles come from the deterministic summarizer (`Code / Chrome — 10分サマリ`). If `SHIFTLOG_LLM_API_KEY` is set on the API process, titles may differ — `helpers/launch.sh` unsets that variable (and starts the API with `env -u SHIFTLOG_LLM_API_KEY`) so an inherited key cannot leak into this instance.
 - `pnpm seed` / curl is a documented CLI path. It is not a substitute for the home-button entry when the feature under test is the button.
 - Nav labels (`ホーム` / `設定` / `許可リスト` / `タイムライン`) appear on every page. `wait --text "設定"` can succeed while Settings is still showing `読み込み中…`. Wait for a body-only string such as `デモデータを投入`, `履歴削除`, or `screenshots: off`.
-- `next dev` may write `apps/web/AGENTS.md`. Cleanup restores the tree; do not treat that file as product output.
+- `apps/web/next.config.ts` sets `agentRules: false`, so `next dev` should not write `apps/web/AGENTS.md` or `CLAUDE.md`. Cleanup still removes those files if a future Next version writes them, and restores `next-env.d.ts`. Do not commit them from a verification run.

@@ -34,6 +34,7 @@ stop_pid() {
 
 # Kill only PIDs recorded at launch / browser start — never by process name.
 stop_pid chrome "${CHROME_PID:-}"
+stop_pid mcp "${MCP_PID:-}"
 stop_pid web "${WEB_PID:-}"
 stop_pid api "${API_PID:-}"
 
