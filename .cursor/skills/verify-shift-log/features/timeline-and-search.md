@@ -32,6 +32,7 @@ Preconditions:
 - **Description match.** Fill `events across` and choose `検索`. The demo rows stay. Each row's description is `N events across M apps`, and that phrase is not in the title, body, or app names. API `q=events%20across` returns those items with `front_matter.description` containing `events across`. This demo seed stores no entity values, so do not expect an entity-only hit; entity values are searched the same way when a memory has them.
 - **Miss.** Run `fill --placeholder "検索（タイトル・本文・アプリ）" --value "volcano"` and `click --text "検索"`. The list shows `「volcano」に一致する記憶はありません。` API `q=volcano` returns `"items":[]`.
 - **Open detail.** Clear back to a match, then `click --text "Code / Chrome — 10分サマリ"`. Heading is that title. Section `Markdown 記憶` contains `## Focus span` and a line mentioning `Code`. Demo Code / Terminal YAML includes `projects: ["shift-log"]`. Loaded-state back link `← タイムライン` returns to `/timeline`. The fetch-error card uses `タイムラインへ戻る` instead — do not wait for that string on a successful open.
+- **API page (second view).** After the demo seed, `curl -sS -H "Authorization: Bearer $SHIFTLOG_API_TOKEN" "$SHIFTLOG_API_ORIGIN/v1/timeline?limit=1"`. The body has one item, the newest demo title `Safari — 10分サマリ`, and `next_cursor` equal to that item's `<window_start>|<id>`. URL-encode that value and pass it as `cursor`. The next body has one item, `Terminal / Slack — 10分サマリ`, and a different cursor. `limit=200` and `cursor=garbage` each return HTTP 400 and `{"error":"invalid_request"}`. The same limit cap applies to `GET /v1/search` (`limit=200` is 400) but search JSON has `items` only — no `next_cursor`.
 - **Proof.** Snapshot + screenshot of the `Code` search results, plus the search JSON. Record feature id `timeline-and-search` and the entry used (`検索` button vs Enter).
 
 ## Gotchas
@@ -44,3 +45,4 @@ Preconditions:
 - React controlled inputs ignore a raw `.value =` assignment. The helper uses the native value setter; do not replace it with a naive DOM write.
 - Memory ids look like `mem_demo_desk_<iso>`. Do not hard-code an id from a previous run.
 - A successful detail page shows `← タイムライン`. `タイムラインへ戻る` appears only on the fetch-error card.
+- The timeline page requests `GET /v1/timeline` with no `limit` or `cursor` and renders `items` only. There is no paging control. Default page size is 50 (max 100), so the three demo rows come back with `next_cursor: null` and all show on the page. A non-null `next_cursor` is the API token `<window_start>|<id>`, not a broken payload. Do not wait for a load-more button.
