@@ -2,7 +2,19 @@
 import { execFileSync, spawnSync } from "node:child_process";
 import { existsSync, mkdirSync, readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { delimiter, dirname, isAbsolute, join } from "node:path";
+
+export function envWithPnpm(pnpmInfo) {
+  if (!pnpmInfo || !isAbsolute(pnpmInfo.bin)) {
+    return process.env;
+  }
+  const binDir = dirname(pnpmInfo.bin);
+  const currentPath = process.env.PATH ?? "";
+  return {
+    ...process.env,
+    PATH: currentPath ? `${binDir}${delimiter}${currentPath}` : binDir,
+  };
+}
 
 export function readPinnedToolchain() {
   const pkg = JSON.parse(readFileSync("package.json", "utf8"));
