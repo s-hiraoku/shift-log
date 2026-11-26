@@ -3,7 +3,7 @@
 import { spawnSync } from "node:child_process";
 import { existsSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { readPinnedToolchain, resolvePinnedPnpm } from "./pnpm-runner.mjs";
+import { envWithPnpm, readPinnedToolchain, resolvePinnedPnpm } from "./pnpm-runner.mjs";
 
 const evidenceDir = process.env.GARDEN_EVIDENCE_DIR ?? ".";
 
@@ -46,9 +46,12 @@ if (!pnpmInfo) {
   process.exit(75);
 }
 
+const childEnv = envWithPnpm(pnpmInfo);
+
 if (!existsSync("node_modules")) {
   const res = spawnSync(pnpmInfo.bin, ["install", "--frozen-lockfile"], {
     stdio: "inherit",
+    env: childEnv,
   });
   const code = res.error ? 127 : res.status ?? 1;
   if (code !== 0) {
@@ -67,6 +70,7 @@ if (!existsSync("node_modules")) {
 
 const build = spawnSync(pnpmInfo.bin, ["--filter", "@shift-log/schema", "build"], {
   stdio: "inherit",
+  env: childEnv,
 });
 const buildCode = build.error ? 127 : build.status ?? 1;
 if (buildCode !== 0) {

@@ -3,7 +3,7 @@
 import { spawnSync } from "node:child_process";
 import { existsSync, readdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { readPinnedToolchain, resolvePinnedPnpm } from "./pnpm-runner.mjs";
+import { envWithPnpm, readPinnedToolchain, resolvePinnedPnpm } from "./pnpm-runner.mjs";
 
 const evidenceDir = process.env.GARDEN_EVIDENCE_DIR ?? ".";
 
@@ -36,15 +36,19 @@ const scriptTests = readdirSync("scripts")
 const stages = [
   { id: "workspace_tests", cmd: pnpmInfo.bin, args: ["-r", "run", "test"] },
   { id: "script_tests", cmd: "node", args: ["--test", ...scriptTests] },
-  { id: "typecheck", cmd: pnpmInfo.bin, args: ["typecheck"] },
+  { id: "typecheck", cmd: pnpmInfo.bin, args: ["-r", "run", "typecheck"] },
 ];
 
+const childEnv = envWithPnpm(pnpmInfo);
 const results = [];
 let failedStage = null;
 
 for (const stage of stages) {
   const started = Date.now();
-  const res = spawnSync(stage.cmd, stage.args, { stdio: "inherit" });
+  const res = spawnSync(stage.cmd, stage.args, {
+    stdio: "inherit",
+    env: childEnv,
+  });
   const durationMs = Date.now() - started;
   const exitCode = res.error ? 127 : res.status ?? 1;
   results.push({
