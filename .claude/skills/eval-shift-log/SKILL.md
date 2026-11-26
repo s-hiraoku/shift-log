@@ -14,7 +14,7 @@ The ten-minute summary (`services/api/src/jobs/llm.ts`, `buildPrompt`) is the on
 
 | File | What |
 | --- | --- |
-| `services/api/eval/summarize/cases.ts` | 24 synthetic windows, tagged by kind (`tags[0]`), with human-written expectations and an `oracle` ideal reply |
+| `services/api/eval/summarize/cases.ts` | 48 synthetic windows, tagged by kind (`tags[0]`; `sensitive` includes `redaction` cases for secrets, emails, phone numbers, incognito titles, and password-manager titles), with human-written expectations and an `oracle` ideal reply |
 | `services/api/eval/summarize/grade.ts` | atomic graders: `pass` = schema ∧ grounded ∧ private ∧ topical; plus entity recall, continuity, llm_used |
 | `services/api/eval/summarize/run.ts` | runner; writes `.claude/hillclimb/summarize/<variant>/` |
 | `services/api/eval/summarize/grade.test.ts` | proves the graders: every oracle passes, generic/invented/leaking replies fail |
@@ -44,7 +44,7 @@ node "$B" .claude/hillclimb/summarize/
 
 ## Read the numbers honestly
 
-- The test split is 10 cases. At 2 reps a pass-rate moves about ±22 points by noise alone (`1/sqrt(n·reps)`). A change smaller than that is not a result. To see smaller effects, add cases (keep the split stratified) or reps, then re-baseline.
+- The test split is 20 cases (train 28). At 2 reps a pass-rate moves about ±16 points by noise alone (`1/sqrt(n·reps)`). A change smaller than that is not a result. To see smaller effects, add cases (keep the split stratified) or reps, then re-baseline.
 - `entities` mostly measures the deterministic extractor in `jobs/entities.ts`, which runs with or without the LLM. Treat it as a guardrail.
 - `continuity` is a cue-word check and only means something on `continuation` cases; elsewhere it is 1.
 - If the baseline `pass` reaches ~95%, the eval is saturated: add harder cases before climbing further.
@@ -74,7 +74,7 @@ Good sources, in order: a summary someone complained about (an issue or bug repo
 
 ## 「続きやって」 ranking eval
 
-`services/api/eval/continue/` sends 31 prompts through the real `POST /v1/agent/continue` (`createApp` + `app.request`) against the summarize cases stored as memories. Kinds (`tags[0]`): `topic_ja`, `topic_en`, `generic` (no topic: the newest memory should come first), `nomatch` (nothing should match by keyword).
+`services/api/eval/continue/` sends 31 prompts through the real `POST /v1/agent/continue` (`createApp` + `app.request`) against the first 24 summarize cases stored as memories (later cases are not labeled in `relevant`, so they stay out of the library until someone labels them). Kinds (`tags[0]`): `topic_ja`, `topic_en`, `generic` (no topic: the newest memory should come first), `nomatch` (nothing should match by keyword).
 
 ```bash
 pnpm run eval:continue --variant v<N>   # from services/api; no LLM, no cost, 1 rep

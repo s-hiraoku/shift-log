@@ -13,8 +13,10 @@ All graders are programmatic (`services/api/eval/summarize/grade.ts`) and read t
 | continuity | with a previous memory, a continuation cue appears exactly when the work continues | cue words only; 1 on non-continuation cases |
 | llm used | the memory carries the LLM summary (`## 要約`) | 0 in fallback mode by design |
 
-Harness checks (`grade.test.ts`, and `--mode oracle` / `--mode null`): every hand-written oracle reply passes all metrics; a generic reply fails `topical`; an invented app, URL, or entity fails `grounded`; a sanitizer leak or a screenshot claim fails `private`; missing or false continuation cues fail `continuity`.
+Harness checks (`grade.test.ts`, and `--mode oracle` / `--mode null`): every hand-written oracle reply passes all metrics; no `forbidden` string of a `sensitive` case reaches the LLM request; a generic reply fails `topical`; an invented app, URL, or entity fails `grounded`; a sanitizer leak or a screenshot claim fails `private`; missing or false continuation cues fail `continuity`.
 
 Fallback baseline (no LLM key), 2026-10-05: pass 29.2% (7/24), topical 29.2%, every other guardrail 100%, llm used 0%.
+
+2026-10-25: 24 cases added (48 total, train 28 / test 20; the test noise floor drops from about ±22 to ±16 points at 2 reps). Fallback re-baseline: pass 16.7% (8/48; train 21.4%, test 10.0%), every guardrail 100%, llm used 0%. Oracle 100%, null 0% pass. The first LLM baseline should be run on this 48-case set.
 
 Not measured yet: whether the summary describes the work well, and whether `unfinished` is grounded. Both need an LLM judge with a rubric of checkable claims, calibrated against a few human-graded cases.
