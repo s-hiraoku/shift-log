@@ -42,3 +42,4 @@ Preconditions:
 - Enabling collection without `Memories 相当を有効化（必須）` still shows `デフォルトオフ` on home.
 - Nav label `設定` is present on every page. Waiting only for that string can click before the Settings form has left `読み込み中…`.
 - Do not treat the static `screenshots: off` badges as proof that a toggle saved; they never change.
+- `POST /v1/history/delete` with a scope other than `last_10_minutes`, `last_hour`, `last_day`, or `all` (for example `{"scope":"forever"}`) returns 400 `{"error":"invalid_request"}`. The four buttons send those four scopes and still finish with `削除完了`.
